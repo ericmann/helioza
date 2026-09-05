@@ -1,0 +1,24 @@
+{
+  "name": "helioza",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Artificial life in orbit around a star: evolving genomes, predators, plagues, and cysts.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Eric Mann",
+  "homepage": "https://helioza.eamann.com",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "serve": "npx --yes serve public",
+    "headless": "node scripts/headless.mjs",
+    "verify": "node scripts/verify-faithful.mjs"
+  },
+  "devDependencies": {
+    "jsdom": "^25.0.1",
+    "vitest": "^2.1.8"
+  }
+}

@@ -1,0 +1,954 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heliozoa — an artificial-life sandbox</title>
+<style>
+  :root {
+    --void: #050813;
+    --panel: #0e1220;
+    --line: #232a40;
+    --ink: #d9dcea;
+    --ink-dim: #8a90a8;
+    --star: #ffb25b;
+    --ember: #ff6a3d;
+    --ice: #7fb8ff;
+    --band: rgba(255, 178, 91, 0.10);
+    --font: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; background: var(--void); color: var(--ink); font-family: var(--font); font-size: 14px; }
+  body { display: grid; grid-template-columns: 1fr 300px; }
+  @media (max-width: 760px) { body { grid-template-columns: 1fr; grid-template-rows: 60vh 1fr; } }
+  #stage { position: relative; overflow: hidden; }
+  canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+  #hint { position: absolute; left: 14px; bottom: 12px; color: var(--ink-dim); font-size: 12px; line-height: 1.5; pointer-events: none; }
+  aside { background: var(--panel); border-left: 1px solid var(--line); padding: 18px 18px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  h1 small { display: block; font-size: 12px; font-weight: 400; color: var(--ink-dim); margin-top: 2px; }
+  h2 { font-size: 13px; font-weight: 600; margin: 0 0 8px; color: var(--ink-dim); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  button { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 13px; cursor: pointer; }
+  button:hover { border-color: var(--ink-dim); }
+  button:focus-visible { outline: 2px solid var(--star); outline-offset: 2px; }
+  button.on { border-color: var(--star); color: var(--star); }
+  button.danger:hover { border-color: var(--ember); color: var(--ember); }
+  .stats { display: grid; grid-template-columns: 1fr auto; row-gap: 4px; column-gap: 12px; font-variant-numeric: tabular-nums; }
+  .stats span:nth-child(even) { text-align: right; }
+  .stats .dim { color: var(--ink-dim); }
+  .trait { display: grid; grid-template-columns: 84px 1fr 34px; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .trait .bar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .trait .bar i { display: block; height: 100%; background: var(--ink-dim); border-radius: 3px; }
+  .trait.bipolar .bar { position: relative; }
+  .trait.bipolar .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--ink-dim); }
+  .trait .val { text-align: right; color: var(--ink-dim); }
+  label.slider { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 12px; margin: 6px 0; }
+  label.slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--star); }
+  label.slider b { font-weight: 500; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  #inspect { border-top: 1px solid var(--line); padding-top: 14px; }
+  #inspect .empty { color: var(--ink-dim); font-size: 13px; line-height: 1.5; }
+  .swatch { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -1px; margin-right: 6px; }
+  #log { font-size: 12px; color: var(--ink-dim); line-height: 1.5; max-height: 110px; overflow: hidden; }
+  #log div:first-child { color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="hint">circles graze, hexagons are omnivores, arrowheads hunt · color is lineage · green dots are plants, red are carrion · hollow hexagons are dormant cysts · dark clouds are hiding spots<br>click to inspect · shift-click to kill · click empty space to drop a plant</div>
+</div>
+<aside>
+  <h1>Heliozoa <small>organisms evolving in orbit around a star</small></h1>
+
+  <div class="row">
+    <button id="btnPause">Pause</button>
+    <button id="btnSpeedH" class="speed on" data-s="0.5">½×</button>
+    <button id="btnSpeed1" class="speed" data-s="1">1×</button>
+    <button id="btnSpeed4" class="speed" data-s="4">4×</button>
+    <button id="btnSpeed16" class="speed" data-s="16">16×</button>
+    <button id="btnReset" class="danger">Restart</button>
+  </div>
+
+  <div>
+    <h2>Population</h2>
+    <div class="stats">
+      <span>Alive</span><span id="sAlive">0</span>
+      <span class="dim">herbivores / omnivores / carnivores</span><span id="sDiet" class="dim">0 / 0 / 0</span>
+      <span class="dim">Infected</span><span id="sSick" class="dim">0</span>
+      <span class="dim">Dormant cysts</span><span id="sCysts" class="dim">0</span>
+      <span>Star output</span><span id="sLum">100%</span>
+      <span>Species</span><span id="sSpecies">0</span>
+      <span>Plants / carrion</span><span id="sFood">0 / 0</span>
+      <span>Born</span><span id="sBorn">0</span>
+      <span class="dim">of which budded</span><span id="sBud" class="dim">0</span>
+      <span class="dim">Starved</span><span id="sStarve" class="dim">0</span>
+      <span class="dim">Burned</span><span id="sBurn" class="dim">0</span>
+      <span class="dim">Froze</span><span id="sFreeze" class="dim">0</span>
+      <span class="dim">Killed</span><span id="sKilled" class="dim">0</span>
+      <span class="dim">Old age</span><span id="sAge" class="dim">0</span>
+      <span class="dim">Time</span><span id="sTick" class="dim">0</span>
+    </div>
+  </div>
+
+  <div>
+    <h2>Species over time</h2>
+    <canvas id="chart" width="264" height="90" style="width:100%;height:90px;display:block;border-radius:4px;background:#0a0e1a"></canvas>
+    <div id="speciesList" style="font-size:12px;color:var(--ink-dim);margin-top:6px;line-height:1.6"></div>
+  </div>
+
+  <div>
+    <h2>Average genome</h2>
+    <div id="avgGenes"></div>
+  </div>
+
+  <div>
+    <h2>Environment</h2>
+    <label class="slider">Food supply <b id="vFood"></b><input id="inFood" type="range" min="0" max="1" step="0.01"></label>
+    <label class="slider">Mutation rate <b id="vMut"></b><input id="inMut" type="range" min="0" max="1" step="0.01"></label>
+    <label class="slider">Mating cost <b id="vMate"></b><input id="inMate" type="range" min="0.05" max="0.6" step="0.01"></label>
+    <label class="slider">Orbital drag <b id="vDrag"></b><input id="inDrag" type="range" min="0" max="0.01" step="0.0005"></label>
+    <label class="slider">Diet assimilation <b id="vAssim"></b><input id="inAssim" type="range" min="0" max="0.8" step="0.05"></label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px"><input id="inImm" type="checkbox" style="accent-color:var(--star)"> Airlift a new family if population collapses</label>
+  </div>
+
+  <div id="inspect">
+    <h2>Selected organism</h2>
+    <div id="inspectBody" class="empty">Nothing selected. Click an organism on the canvas to follow it and read its genome.</div>
+  </div>
+
+  <div>
+    <h2>Events</h2>
+    <div id="log"></div>
+  </div>
+</aside>
+
+<script>
+// ───────────────────────────── Simulation core ─────────────────────────────
+// Everything above the Renderer section has no DOM dependency so it can be
+// unit-tested or run headless in node.
+
+const GENES = [
+  // name, bipolar?, description
+  ['size',        false, 'radius, energy capacity, metabolic cost'],
+  ['speed',       false, 'max thrust; thrust costs energy'],
+  ['sense',       false, 'perception radius; costs upkeep'],
+  ['aggression',  false, 'attack strength; below 0.45 never attacks; costs upkeep'],
+  ['armor',       false, 'damage reduction; costs upkeep'],
+  ['hue',         false, 'color only — drifts freely, marks lineages'],
+  ['foodDrive',   false, 'pull toward nearest food'],
+  ['kinDrive',    true,  'toward (+) or away from (−) relatives'],
+  ['strangerDrive', true, 'toward (+) or away from (−) non-relatives'],
+  ['orbitRadius', false, 'preferred distance from the star'],
+  ['orbitHold',   false, 'how hard it holds that radius'],
+  ['mateDrive',   false, 'energy level at which it breeds'],
+  ['hideDrive',   false, 'pull toward a hiding spot when fed or threatened; hidden organisms are safe and can mate, but cannot eat'],
+  ['marker1',     false, 'neutral recognition marker — kin is judged on hue, markers, and diet'],
+  ['marker2',     false, 'neutral recognition marker'],
+  ['diet',        false, '0 = herbivore, 1 = carnivore; an omnivore digests both poorly'],
+  ['kinTolerance', false, 'low = will eat relatives when starving'],
+  ['fear',        false, 'flees larger predators'],
+  ['immune',      false, 'immune type; disease spreads between similar types'],
+];
+const KIN_GENES = ['hue', 'marker1', 'marker2', 'diet'];   // diverging diets stop interbreeding
+const G = Object.fromEntries(GENES.map((g, i) => [g[0], i]));
+
+const CFG = {
+  worldR: 470,
+  coronaR: 38,          // instant death
+  innerR: 130,          // heat damage inside this
+  outerR: 330,          // cold damage outside this
+  gravity: 170,         // a = gravity / r^2, capped (orbital speed ≈0.9 mid-band)
+  gravityCap: 0.04,
+  drag: 0.0003,
+  maxSpeed: 1.8,
+  hideSpots: 7,
+  hideMetabolism: 0.5,  // metabolic multiplier while hidden
+  heatRate: 0.9, coldRate: 0.5,
+
+  foodRate: 0.05,       // baseline plant spawn (seeds blown in), per tick
+  plantGrowth: 0.006,  // logistic regrowth: spawn += growth * n * (1 - n / foodCap)
+  foodEnergy: 28,
+  foodCap: 420,
+  preyRatio: 1.1,       // will attack anything up to this fraction of own radius; damage falls off steeply against bigger prey
+  sprint: 1.5,          // thrust and speed multiplier while chasing prey (costs double)
+  killYield: 0.8,       // fraction of victim energy transferred to killer
+
+  plagueEvery: 5000,    // ticks between plague seeds
+  plagueLength: 900,
+  plagueDrain: 0.05,
+  plagueSpread: 0.12,   // per contact-tick chance, if immune types are similar
+  immuneMatch: 0.12,
+
+  solarPeriod: 14000,   // luminosity cycle length
+  solarAmplitude: 0.22,
+  flareChance: 1 / 9000, flareLength: 350, flareBoost: 0.45,
+
+  founders: 10,         // initial lineages
+  familySize: 12,       // organisms per founding lineage
+  immigration: false,   // god-mode: airlift a new family when the population collapses
+  minPop: 12,
+  immigrants: 8,        // one new lineage of this size arrives when population collapses
+
+  cystAt: 0.22,         // energy fraction below which an organism settles into orbit to encyst
+  cystMinDormancy: 600,
+  cystMaxAge: 9000,
+  cystHatchFood: 30,    // effective food (plants×plantEff + meat×meatEff) needed to hatch
+  cystHatchEnergy: 0.85,    // fraction of stored energy kept through dormancy
+
+  dietAssimilation: 0.35,   // Baldwin effect: offspring diet drifts toward what the parent actually ate
+  founderSigma: 0.05,   // gene spread within a founding family
+
+  mutationRate: 0.25,   // per-gene chance of mutating on reproduction
+  mutationSigma: 0.08,
+  bigMutation: 0.02,    // chance a mutation is a full re-roll
+  kinThreshold: 0.12,   // mean |diff| over KIN_GENES below which two are relatives
+  mateCost: 0.30,       // fraction of each parent's energy paid to child
+  mateCooldown: 260,
+  budAfter: 700,        // ticks eligible-but-mateless before an organism buds asexually
+  budCost: 0.45,        // fraction of energy given to a budded clone
+  maturity: 220,
+
+  baseMetabolism: 0.014,
+  maxAgeMin: 2600, maxAgeMax: 5200,
+};
+
+function rand(a = 0, b = 1) { return a + Math.random() * (b - a); }
+function gauss() { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const clamp01 = x => x < 0 ? 0 : x > 1 ? 1 : x;
+
+function randomGenome() { return GENES.map(() => Math.random()); }
+
+function geneDistance(a, b) {
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d += Math.abs(a[i] - b[i]);
+  return d / a.length;
+}
+const KIN_IDX = KIN_GENES.map(n => G[n]);
+function kinDistance(a, b) {
+  let d = 0;
+  for (const i of KIN_IDX) d += Math.abs(a[i] - b[i]);
+  return d / KIN_IDX.length;
+}
+
+function breed(a, b, cfg, realizedDiet) {
+  const child = a.map((ga, i) => (Math.random() < 0.5 ? ga : b[i]));
+  for (let i = 0; i < child.length; i++) {
+    if (Math.random() < cfg.mutationRate) {
+      child[i] = Math.random() < cfg.bigMutation ? Math.random() : clamp01(child[i] + gauss() * cfg.mutationSigma);
+    }
+  }
+  // genetic assimilation: the diet gene drifts toward the parents' realized diet
+  if (realizedDiet !== undefined && realizedDiet !== null) {
+    child[G.diet] = clamp01(child[G.diet] + cfg.dietAssimilation * (realizedDiet - child[G.diet]) * Math.random());
+  }
+  return child;
+}
+
+let nextId = 1;
+
+class Organism {
+  constructor(genome, x, y, vx, vy, energy, generation = 0) {
+    this.id = nextId++;
+    this.g = genome;
+    this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+    this.age = 0;
+    this.generation = generation;
+    this.kills = 0; this.offspring = 0;
+    this.mateTimer = 0;
+    this.maxAge = rand(CFG.maxAgeMin, CFG.maxAgeMax);
+    this.alive = true;
+    this.cause = null;
+    this.hidden = false;
+    this.species = 0;
+    this.lonely = 0;
+    this.infected = 0;      // ticks of disease remaining
+    this.recovered = false;
+    this.atePlant = 0; this.ateMeat = 0;
+    this.settling = false;  // heading for a stable orbit to encyst
+    this.hasEncysted = false;
+    this.refresh();
+    this.energy = Math.min(energy, this.maxEnergy);
+  }
+  refresh() {
+    const g = this.g;
+    this.r = 3 + 6 * g[G.size];
+    this.maxEnergy = (50 + 130 * g[G.size]) * (1 + 0.6 * g[G.diet]);   // carnivores store fat between meals
+    this.thrust = (0.003 + 0.02 * g[G.speed]) * (1.1 - 0.3 * g[G.size]);    // big bodies accelerate a little slower
+    this.maxSpeed = CFG.maxSpeed * (1.12 - 0.3 * g[G.size]);                 // and top out a little lower
+    this.plantEff = Math.pow(1 - g[G.diet], 1.7);   // concave: specialists digest well, generalists pay for flexibility
+    this.meatEff = Math.pow(g[G.diet], 1.7);
+    this.senseR = 30 + 150 * g[G.sense];
+    this.prefR = CFG.innerR * 0.75 + (CFG.outerR * 1.12 - CFG.innerR * 0.75) * g[G.orbitRadius];
+    this.mateAt = this.maxEnergy * (0.35 + 0.6 * g[G.mateDrive]);
+    this.hue = Math.round(360 * g[G.hue]);
+  }
+  get dist() { return Math.hypot(this.x, this.y); }
+  get realizedDiet() { const t = this.atePlant + this.ateMeat; return t > 0 ? this.ateMeat / t : null; }
+}
+
+class Cyst {
+  constructor(o) {
+    this.x = o.x; this.y = o.y; this.vx = o.vx; this.vy = o.vy;
+    this.g = o.g; this.generation = o.generation; this.species = o.species; this.hue = o.hue;
+    this.plantEff = o.plantEff; this.meatEff = o.meatEff;
+    this.energy = o.energy;     // hatches with what it went in with, less dormancy cost
+    this.age = 0; this.alive = true;
+  }
+}
+
+class Food {
+  constructor(x, y, vx, vy, energy, kind = 'plant') { this.x = x; this.y = y; this.vx = vx; this.vy = vy; this.energy = energy; this.kind = kind; this.alive = true; }
+}
+
+class World {
+  constructor(cfg = CFG) {
+    this.cfg = cfg;
+    this.reset();
+  }
+  reset() {
+    this.tick = 0;
+    this.orgs = [];
+    this.food = [];
+    this.stats = { born: 0, budded: 0, starved: 0, burned: 0, froze: 0, killed: 0, oldAge: 0, immigrants: 0, plantsEaten: 0, meatEaten: 0, infections: 0, encysted: 0, hatched: 0 };
+    this.events = [];
+    this.speciesCount = 0;
+    this.species = [];        // registry: {id, hue, born, count, peak, alive}
+    this.history = [];        // [{tick, counts: Map(id -> n)}]
+    this.nextSpecies = 1;
+    this.luminosity = 1; this.flare = 0; this.innerR = this.cfg.innerR; this.outerR = this.cfg.outerR;
+    this.familiesSpawned = 0;
+    this.cysts = [];
+    this.hides = [];
+    for (let i = 0; i < this.cfg.hideSpots; i++) {
+      const ang = i / this.cfg.hideSpots * Math.PI * 2 + rand(-0.3, 0.3);
+      const r = rand(this.cfg.innerR + 25, this.cfg.outerR - 25);
+      const x = Math.cos(ang) * r, y = Math.sin(ang) * r;
+      const [vx, vy] = this.orbitalVelocity(x, y, 1);
+      this.hides.push({ x, y, vx, vy, r: rand(28, 44) });
+    }
+    for (let i = 0; i < this.cfg.founders; i++) this.spawnFamily(this.cfg.familySize);
+    for (let i = 0; i < 60; i++) this.spawnFood();
+  }
+  log(msg) { this.events.unshift(`${this.tick}: ${msg}`); if (this.events.length > 8) this.events.pop(); }
+
+  orbitalVelocity(x, y, factor = 1) {
+    const r = Math.hypot(x, y) || 1;
+    const a = Math.min(this.cfg.gravity / (r * r), this.cfg.gravityCap);
+    const v = Math.sqrt(a * r) * factor;
+    return [-y / r * v, x / r * v];
+  }
+  spawnFamily(n, kind) {
+    const founder = randomGenome();
+    if (kind === undefined) kind = this.familiesSpawned++ % 4;
+    if (kind === 0) {           // carnivore founder
+      founder[G.diet] = rand(0.7, 1); founder[G.aggression] = rand(0.6, 1); founder[G.size] = rand(0.55, 1); founder[G.sense] = rand(0.5, 1);
+    } else {                    // herbivore-leaning founder
+      founder[G.diet] = rand(0, 0.35); founder[G.size] = rand(0, 0.6);
+    }
+    const ang = rand(0, Math.PI * 2), r = rand(this.cfg.innerR + 30, this.cfg.outerR - 30);
+    for (let i = 0; i < n; i++) {
+      const g = founder.map(v => clamp01(v + gauss() * this.cfg.founderSigma));
+      const a = ang + gauss() * 0.15, rr = r + gauss() * 20;
+      this.spawnRandom(g, Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+  }
+  spawnRandom(genome = randomGenome(), x, y) {
+    if (x === undefined) {
+      const ang = rand(0, Math.PI * 2);
+      const r = rand(this.cfg.innerR + 20, this.cfg.outerR - 20);
+      x = Math.cos(ang) * r; y = Math.sin(ang) * r;
+    }
+    const [vx, vy] = this.orbitalVelocity(x, y, 1);
+    const o = new Organism(genome, x, y, vx, vy, 1e9);
+    o.energy = o.maxEnergy * rand(0.55, 0.85);
+    o.age = rand(0, this.cfg.maturity);
+    this.orgs.push(o);
+    return o;
+  }
+  spawnFood(x, y) {
+    if (this.food.length >= this.cfg.foodCap) return;
+    if (x === undefined) {
+      const ang = rand(0, Math.PI * 2);
+      // mild bias toward the star, where the light is
+      const r = this.cfg.innerR * 0.85 + (this.cfg.worldR - 10 - this.cfg.innerR * 0.85) * Math.pow(Math.random(), 1.25);
+      x = Math.cos(ang) * r; y = Math.sin(ang) * r;
+    }
+    const [vx, vy] = this.orbitalVelocity(x, y, rand(0.9, 1.0));
+    this.food.push(new Food(x, y, vx, vy, this.cfg.foodEnergy));
+  }
+  isKin(a, b) { return kinDistance(a.g, b.g) < this.cfg.kinThreshold; }
+
+  kill(o, cause) {
+    if (!o.alive) return;
+    o.alive = false; o.cause = cause;
+    const key = { starved: 'starved', burned: 'burned', froze: 'froze', killed: 'killed', eaten: 'killed', oldAge: 'oldAge', smitten: 'killed' }[cause];
+    if (key) this.stats[key]++;
+    // carrion: whatever mass is left becomes food, unless the star or a predator took it
+    if (cause !== 'burned' && cause !== 'smitten' && cause !== 'eaten') {
+      const e = 20 + 50 * o.g[G.size] + Math.max(0, o.energy) * 0.5;
+      this.food.push(new Food(o.x, o.y, o.vx, o.vy, e, 'meat'));
+    }
+  }
+
+  step() {
+    const cfg = this.cfg;
+    this.tick++;
+    const orgs = this.orgs, food = this.food;
+
+    // ── hiding spots orbit without drag ──
+    for (const h of this.hides) {
+      const r = Math.hypot(h.x, h.y) || 1;
+      const a = Math.min(cfg.gravity / (r * r), cfg.gravityCap);
+      h.vx += -h.x / r * a; h.vy += -h.y / r * a;
+      h.x += h.vx; h.y += h.vy;
+    }
+    for (const o of orgs) {
+      o.hidden = false;
+      for (const h of this.hides) { const dx = o.x - h.x, dy = o.y - h.y; if (dx * dx + dy * dy < h.r * h.r) { o.hidden = true; break; } }
+    }
+
+    // ── star: slow luminosity cycle plus occasional flares ──
+    if (this.flare > 0) this.flare--;
+    else if (Math.random() < cfg.flareChance && this.tick > 2000) { this.flare = cfg.flareLength; this.log('solar flare'); }
+    this.luminosity = 1 + cfg.solarAmplitude * Math.sin(this.tick / cfg.solarPeriod * Math.PI * 2) + (this.flare > 0 ? cfg.flareBoost * Math.sin(this.flare / cfg.flareLength * Math.PI) : 0);
+    const lum = Math.sqrt(this.luminosity);
+    this.innerR = cfg.innerR * lum; this.outerR = cfg.outerR * lum;
+
+    // ── plants regrow logistically from standing stock, plus a trickle of seeds ──
+    const plants = food.reduce((n, f) => n + (f.alive && f.kind === 'plant' ? 1 : 0), 0);
+    const spawnP = cfg.foodRate + cfg.plantGrowth * plants * Math.max(0, 1 - plants / cfg.foodCap);
+    let sp = spawnP; while (sp > 0) { if (Math.random() < sp) this.spawnFood(); sp -= 1; }
+
+    // ── disease ──
+    if (this.tick % cfg.plagueEvery === 0 && orgs.length > 40) {
+      const victim = orgs[Math.floor(Math.random() * orgs.length)];
+      if (victim.alive && !victim.infected) { victim.infected = cfg.plagueLength; this.log(`a plague breaks out in species ${victim.species || '?'}`); }
+    }
+    // ── cysts: dormant, gravity-bound, hatch when there is something to eat ──
+    let plantCount = 0, meatCount = 0;
+    for (const f of food) if (f.alive) { if (f.kind === 'plant') plantCount++; else meatCount++; }
+    const hatched = [];
+    for (const c of this.cysts) {
+      const r = Math.hypot(c.x, c.y) || 1;
+      const a = Math.min(cfg.gravity / (r * r), cfg.gravityCap);
+      c.vx += -c.x / r * a; c.vy += -c.y / r * a;
+      c.x += c.vx; c.y += c.vy;
+      c.age++;
+      if (r < cfg.coronaR || r > cfg.worldR + 40 || c.age > cfg.cystMaxAge) { c.alive = false; continue; }
+      if (c.age > cfg.cystMinDormancy && c.age % 30 === 0 && r > this.innerR && r < this.outerR
+          && plantCount * c.plantEff + meatCount * c.meatEff >= cfg.cystHatchFood) {
+        const o = new Organism(c.g, c.x, c.y, c.vx, c.vy, 1e9, c.generation);
+        o.energy = Math.max(o.maxEnergy * 0.08, c.energy * cfg.cystHatchEnergy); o.age = cfg.maturity; o.species = c.species; o.hasEncysted = true;
+        hatched.push(o); c.alive = false; this.stats.hatched++;
+      }
+    }
+    if (hatched.length) { for (const o of hatched) orgs.push(o); }
+    this.cysts = this.cysts.filter(c => c.alive);
+
+    for (const f of food) {
+      const r = Math.hypot(f.x, f.y) || 1;
+      const a = Math.min(cfg.gravity / (r * r), cfg.gravityCap);
+      f.vx += -f.x / r * a; f.vy += -f.y / r * a;
+      f.vx *= 1 - cfg.drag; f.vy *= 1 - cfg.drag;
+      f.x += f.vx; f.y += f.vy;
+      if (r < cfg.coronaR || r > cfg.worldR + 40) f.alive = false;
+      if (f.kind === 'meat') { f.energy -= 0.02; if (f.energy <= 0) f.alive = false; }   // carrion rots
+    }
+
+    // ── perception + steering ──
+    for (const o of orgs) {
+      if (!o.alive) continue;
+      const g = o.g;
+      let nf = null, nfd = Infinity, nk = null, nkd = Infinity, ns = null, nsd = Infinity;
+      const sr2 = o.senseR * o.senseR;
+      for (const f of food) {
+        if (!f.alive) continue;
+        const eff = f.kind === 'plant' ? o.plantEff : o.meatEff;
+        if (eff < 0.15) continue;                          // not worth digesting
+        const dx = f.x - o.x, dy = f.y - o.y, d2 = (dx * dx + dy * dy) / (eff * eff);   // prefer what it digests well
+        if (d2 < sr2 && d2 < nfd) { nfd = d2; nf = f; }
+      }
+      let prey = null, preyd = Infinity, threat = null, threatd = Infinity;
+      const hunter = g[G.aggression] > 0.45 && o.meatEff > 0.3 && o.energy < o.maxEnergy * 0.7;   // satiated predators don't hunt
+      const starving = o.energy < o.maxEnergy * 0.4;
+      for (const p of orgs) {
+        if (p === o || !p.alive) continue;
+        const dx = p.x - o.x, dy = p.y - o.y, d2 = dx * dx + dy * dy;
+        if (d2 > sr2) continue;
+        const kin = this.isKin(o, p);
+        if (kin) { if (d2 < nkd) { nkd = d2; nk = p; } }
+        else if (!p.hidden && d2 < nsd) { nsd = d2; ns = p; }
+        if (p.hidden) continue;
+        if (hunter && p.r < o.r * cfg.preyRatio && (!kin || (starving && g[G.kinTolerance] < 0.5)) && d2 < preyd) { preyd = d2; prey = p; }
+        if (p.g[G.aggression] > 0.45 && p.meatEff > 0.3 && o.r < p.r * cfg.preyRatio && d2 < threatd) { threatd = d2; threat = p; }
+      }
+      o.nearKin = nk; o.nearStranger = ns; o.prey = prey; o.threat = threat;
+      let nh = null, nhd = Infinity;
+      for (const h of this.hides) { const dx = h.x - o.x, dy = h.y - o.y, d2 = dx * dx + dy * dy; if (d2 < sr2 * 1.5 && d2 < nhd) { nhd = d2; nh = h; } }
+
+      let sx = 0, sy = 0;
+      const pull = (t, w) => { if (!t || !w) return; const dx = t.x - o.x, dy = t.y - o.y, d = Math.hypot(dx, dy) || 1; sx += dx / d * w; sy += dy / d * w; };
+      const hungry = 1.2 - o.energy / o.maxEnergy;         // 0.2 when full, 1.2 when empty
+      o.settling = !o.hasEncysted && o.energy < o.maxEnergy * cfg.cystAt && !(nf && nfd < 40 * 40);   // starving, and no food in reach
+      if (!o.settling) {
+      pull(nf, g[G.foodDrive] * (1.2 + 1.6 * hungry));
+      pull(nk, (g[G.kinDrive] * 2 - 1) * (o.energy > o.mateAt ? 1.4 : 0.8));
+      pull(ns, (g[G.strangerDrive] * 2 - 1) * (g[G.aggression] > 0.45 ? 0.8 + hungry * 0.6 : 1));
+      pull(prey, o.meatEff * (0.5 + hungry * 1.4));
+      const threatened = threat && threatd < 80 * 80;
+      if (threatened) pull(threat, -g[G.fear] * 2.2);
+      pull(nh, g[G.hideDrive] * (1.3 - hungry) * (threatened ? 1.8 : 1) * (o.hidden ? 0.4 : 1));
+      }
+      // orbit steering: aim for circular velocity at the preferred radius,
+      // plus a radial nudge toward it. Weighted by the orbitHold gene, with a
+      // hard-wired survival reflex near the corona and the cold rim.
+      const r = o.dist || 1, ux = o.x / r, uy = o.y / r;
+      const spin = (o.x * o.vy - o.y * o.vx) >= 0 ? 1 : -1;   // keep current sense of rotation
+      const accel = Math.min(cfg.gravity / (r * r), cfg.gravityCap);
+      const vCirc = Math.sqrt(accel * r);
+      // preferred radius tracks the star's output; a settling organism aims for the safe middle of the band
+      const prefR = o.settling ? Math.max(this.innerR * 1.2, Math.min(this.outerR * 0.9, r)) : o.prefR * lum;
+      const off = Math.max(-1, Math.min(1, (prefR - r) / 90));
+      const danger = r < this.innerR * 0.85 || r > this.outerR * 1.12;
+      const hold = (danger || o.settling) ? 1.6 : g[G.orbitHold] * 1.3;
+      const dvx = -uy * spin * vCirc + ux * off * 0.5 - o.vx;
+      const dvy = ux * spin * vCirc + uy * off * 0.5 - o.vy;
+      sx += dvx * hold * 1.4; sy += dvy * hold * 1.4;
+      // encyst once the orbit is circular and inside the band
+      if (o.settling && r > this.innerR * 1.1 && r < this.outerR * 0.95 && Math.hypot(dvx, dvy) < 0.12 && o.energy > o.maxEnergy * 0.05) {
+        o.alive = false; o.cause = 'encysted'; o.hasEncysted = true;
+        this.cysts.push(new Cyst(o)); this.stats.encysted++;
+        continue;
+      }
+
+      const mag = Math.hypot(sx, sy);
+      o.sprinting = !!(prey && preyd < 140 * 140 && hungry > 0.5);
+      if (mag > 0.05) {
+        const boost = o.sprinting ? cfg.sprint : 1;
+        const t = o.thrust * Math.min(1, mag) * boost;
+        o.vx += sx / mag * t; o.vy += sy / mag * t;
+        o.energy -= t * 0.5 * (0.5 + o.r / 6) * (o.sprinting ? 1.6 : 1);
+      }
+    }
+
+    // ── organism physics, metabolism, environment ──
+    for (const o of orgs) {
+      if (!o.alive) continue;
+      const cfgc = cfg;
+      const r = o.dist || 1;
+      const a = Math.min(cfgc.gravity / (r * r), cfgc.gravityCap);
+      o.vx += -o.x / r * a; o.vy += -o.y / r * a;
+      o.vx *= 1 - cfgc.drag; o.vy *= 1 - cfgc.drag;
+      const sp = Math.hypot(o.vx, o.vy), maxSp = o.maxSpeed * (o.sprinting ? cfgc.sprint : 1);
+      if (sp > maxSp) { o.vx *= maxSp / sp; o.vy *= maxSp / sp; }
+      o.x += o.vx; o.y += o.vy;
+      o.age++;
+      if (o.mateTimer > 0) o.mateTimer--;
+
+      const g = o.g;
+      o.energy -= (cfgc.baseMetabolism + 0.05 * g[G.size] * g[G.size] + 0.012 * g[G.armor] + 0.010 * g[G.sense] + 0.008 * g[G.aggression]) * (o.hidden ? cfgc.hideMetabolism : 1);
+
+      const nr = o.dist;
+      if (nr < cfgc.coronaR) { this.kill(o, 'burned'); continue; }
+      // big bodies absorb more heat; small bodies lose heat faster (surface/volume)
+      const inR = this.innerR, outR = this.outerR;
+      if (nr < inR) o.energy -= cfgc.heatRate * (0.4 + 1.2 * g[G.size]) * ((inR - nr) / inR) ** 1.5;
+      if (nr > outR) o.energy -= cfgc.coldRate * (1.6 - 1.2 * g[G.size]) * ((nr - outR) / (cfgc.worldR - outR)) ** 1.5;
+      if (o.infected > 0) { o.energy -= cfgc.plagueDrain; if (--o.infected === 0) o.recovered = true; }
+      if (nr > cfgc.worldR + 30) { this.kill(o, 'froze'); continue; }
+      if (o.energy <= 0) {
+        const cause = nr < inR ? 'burned' : nr > outR ? 'froze' : 'starved';
+        this.kill(o, cause); continue;
+      }
+      if (o.age > o.maxAge) { this.kill(o, 'oldAge'); continue; }
+    }
+
+    // ── eating ──
+    for (const o of orgs) {
+      if (!o.alive || o.hidden) continue;        // nothing to eat in the dark
+      for (const f of food) {
+        if (!f.alive) continue;
+        const dx = f.x - o.x, dy = f.y - o.y;
+        if (dx * dx + dy * dy < (o.r + 4) ** 2) {
+          const eff = f.kind === 'plant' ? o.plantEff : o.meatEff;
+          if (eff < 0.15) continue;
+          f.alive = false;
+          o.energy = Math.min(o.maxEnergy, o.energy + f.energy * eff);
+          if (f.kind === 'plant') { this.stats.plantsEaten++; o.atePlant += f.energy * eff; } else { this.stats.meatEaten++; o.ateMeat += f.energy * eff; }
+        }
+      }
+    }
+
+    // ── contact: combat and mating ──
+    const born = [];
+    for (let i = 0; i < orgs.length; i++) {
+      const a = orgs[i]; if (!a.alive) continue;
+      for (let j = i + 1; j < orgs.length; j++) {
+        const b = orgs[j]; if (!b.alive) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        const reach = a.r + b.r + 3 + (a.prey === b || b.prey === a ? 5 : 0);
+        if (d2 > reach * reach) continue;
+        if ((a.infected > 0) !== (b.infected > 0) && Math.abs(a.g[G.immune] - b.g[G.immune]) < cfg.immuneMatch) {
+          const sick = a.infected > 0 ? a : b, well = sick === a ? b : a;
+          if (!well.recovered && Math.random() < cfg.plagueSpread) { well.infected = cfg.plagueLength; this.stats.infections++; }
+        }
+        if (this.isKin(a, b)) {
+          if (a.age > cfg.maturity && b.age > cfg.maturity && a.mateTimer === 0 && b.mateTimer === 0
+              && a.energy > a.mateAt && b.energy > b.mateAt) {
+            const ea = a.energy * cfg.mateCost, eb = b.energy * cfg.mateCost;
+            a.energy -= ea; b.energy -= eb;
+            a.mateTimer = b.mateTimer = cfg.mateCooldown;
+            a.lonely = b.lonely = 0;
+            a.offspring++; b.offspring++;
+            const ra = a.realizedDiet, rb = b.realizedDiet;
+            const realized = ra === null ? rb : rb === null ? ra : (ra + rb) / 2;
+            const child = new Organism(breed(a.g, b.g, cfg, realized), (a.x + b.x) / 2, (a.y + b.y) / 2,
+              (a.vx + b.vx) / 2, (a.vy + b.vy) / 2, ea + eb, Math.max(a.generation, b.generation) + 1);
+            born.push(child);
+            this.stats.born++;
+          }
+        }
+        this.fight(a, b); this.fight(b, a);
+      }
+      // soft collision so bodies don't stack
+      for (let j = i + 1; j < orgs.length; j++) {
+        const b = orgs[j]; if (!b.alive) continue;
+        const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 0.01, min = a.r + b.r;
+        if (d < min) { const push = (min - d) * 0.15; a.x -= dx / d * push; a.y -= dy / d * push; b.x += dx / d * push; b.y += dy / d * push; }
+      }
+    }
+    // asexual budding for the mateless
+    for (const o of orgs) {
+      if (!o.alive || o.age < cfg.maturity || o.mateTimer > 0 || o.energy < o.mateAt) { if (o.alive && o.mateTimer === 0) o.lonely = 0; continue; }
+      if (++o.lonely < cfg.budAfter) continue;
+      const e = o.energy * cfg.budCost; o.energy -= e;
+      o.mateTimer = cfg.mateCooldown; o.lonely = 0; o.offspring++;
+      const ang = rand(0, Math.PI * 2);
+      born.push(new Organism(breed(o.g, o.g, cfg, o.realizedDiet), o.x + Math.cos(ang) * o.r * 2, o.y + Math.sin(ang) * o.r * 2, o.vx, o.vy, e, o.generation + 1));
+      this.stats.born++; this.stats.budded++;
+    }
+    for (const c of born) orgs.push(c);
+
+    // ── cleanup and population floor ──
+    this.orgs = orgs.filter(o => o.alive);
+    this.food = food.filter(f => f.alive);
+    if (this.orgs.length < cfg.minPop && cfg.immigration) {
+      this.log(`population fell to ${this.orgs.length}; a family of ${cfg.immigrants} immigrants arrived`);
+      this.spawnFamily(cfg.immigrants);
+      this.stats.immigrants++;
+    }
+    if (this.orgs.length === 0 && this.cysts.length === 0 && !this.extinct) { this.extinct = true; this.log('life is extinct'); }
+    if (this.orgs.length > 0) this.extinct = false;
+    if (this.tick % 90 === 0) this.trackSpecies();
+  }
+
+  fight(att, def) {
+    if (att.prey !== def) return;            // only attacks what it decided to hunt (size ladder, kin tolerance)
+    if (def.hidden || att.hidden) return;
+    const ag = att.g[G.aggression];
+    // a bite: a kill should take a handful of contact ticks, not a siege
+    const sizeAdv = Math.pow(att.r / def.r, 2.5);
+    const dmg = Math.max(0, (ag - 0.3) * 12 * (0.5 + att.r / 8) * sizeAdv - def.g[G.armor] * 6);
+    att.energy -= 0.4;
+    if (dmg <= 0) return;
+    def.energy -= dmg;
+    if (def.energy <= 0) {
+      att.kills++;
+      // the kill is a meal: the victim's remaining reserves plus its body
+      const meal = (Math.max(0, def.energy + dmg) * this.cfg.killYield + 25 + 70 * def.g[G.size]) * att.meatEff;
+      att.energy = Math.min(att.maxEnergy, att.energy + meal); att.ateMeat += meal;
+      this.kill(def, 'eaten');
+      if (att.kills === 5) this.log(`#${att.id} has made 5 kills`);
+    }
+  }
+
+  // Cluster the population into species (single linkage on kin distance) and
+  // carry species identity forward by matching cluster centroids to the previous pass.
+  trackSpecies() {
+    const orgs = this.orgs, n = orgs.length;
+    const parent = Array.from({ length: n }, (_, i) => i);
+    const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++)
+      if (this.isKin(orgs[i], orgs[j])) parent[find(i)] = find(j);
+    const groups = new Map();
+    for (let i = 0; i < n; i++) { const r = find(i); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(orgs[i]); }
+    const clusters = [...groups.values()].map(members => {
+      const c = KIN_IDX.map(() => 0);
+      for (const o of members) KIN_IDX.forEach((gi, k) => c[k] += o.g[gi]);
+      const centroid = c.map(v => v / members.length);
+      const prevIds = new Map();
+      for (const o of members) if (o.species) prevIds.set(o.species, (prevIds.get(o.species) || 0) + 1);
+      return { members, centroid, prevIds };
+    }).sort((a, b) => b.members.length - a.members.length);
+
+    const claimed = new Set();
+    const counts = new Map();
+    for (const cl of clusters) {
+      // inherit the id most of its members already carry, largest cluster first
+      let best = null, bestN = 0;
+      for (const [id, k] of cl.prevIds) if (!claimed.has(id) && k > bestN) { best = id; bestN = k; }
+      let sp;
+      if (best) sp = this.species.find(s => s.id === best);
+      else {
+        const hue = Math.round(360 * cl.centroid[0]);
+        sp = { id: this.nextSpecies++, hue, born: this.tick, count: 0, peak: 0, alive: true };
+        this.species.push(sp);
+        if (this.tick > 0 && cl.members.length >= 3) this.log(`species ${sp.id} split off (${cl.members.length} members)`);
+      }
+      claimed.add(sp.id);
+      sp.alive = true; sp.count = cl.members.length; sp.peak = Math.max(sp.peak, sp.count);
+      sp.hue = Math.round(360 * cl.centroid[0]);
+      for (const o of cl.members) o.species = sp.id;
+      counts.set(sp.id, sp.count);
+    }
+    for (const sp of this.species) {
+      if (sp.alive && !claimed.has(sp.id)) {
+        sp.alive = false; sp.count = 0;
+        if (sp.peak >= 8) this.log(`species ${sp.id} went extinct (peaked at ${sp.peak})`);
+      }
+    }
+    // dominance events
+    const total = n || 1;
+    for (const sp of this.species) {
+      const share = (counts.get(sp.id) || 0) / total;
+      if (share >= 0.6 && !sp.dominant && total >= 30) { sp.dominant = true; this.log(`species ${sp.id} now holds ${Math.round(share * 100)}% of the population`); }
+      if (share < 0.4) sp.dominant = false;
+    }
+    this.speciesCount = clusters.filter(c => c.members.length >= 2).length;
+    this.history.push({ tick: this.tick, counts });
+    if (this.history.length > 360) this.history.shift();
+  }
+
+  averageGenome() {
+    const avg = GENES.map(() => 0);
+    for (const o of this.orgs) for (let i = 0; i < avg.length; i++) avg[i] += o.g[i];
+    return avg.map(v => this.orgs.length ? v / this.orgs.length : 0);
+  }
+}
+
+if (typeof module !== 'undefined') module.exports = { World, Organism, GENES, G, CFG, breed, geneDistance };
+
+// ───────────────────────────── Renderer + UI ─────────────────────────────
+if (typeof document !== 'undefined') (function () {
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const world = new World(CFG);
+  let paused = false, speed = 0.5, acc = 0, selected = null, dpr = 1, scale = 1, cx = 0, cy = 0;
+
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    scale = Math.min(w, h) / (2 * (CFG.worldR + 20));
+    cx = w / 2; cy = h / 2;
+  }
+  window.addEventListener('resize', resize); resize();
+
+  const toWorld = (px, py) => [(px - cx) / scale, (py - cy) / scale];
+  const toScreen = (x, y) => [cx + x * scale, cy + y * scale];
+
+  function draw() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = '#050813'; ctx.fillRect(0, 0, w, h);
+
+    // habitable band
+    const inR = world.innerR * scale, outR = world.outerR * scale;
+    ctx.beginPath(); ctx.arc(cx, cy, outR, 0, Math.PI * 2); ctx.arc(cx, cy, inR, 0, Math.PI * 2, true);
+    ctx.fillStyle = 'rgba(255,178,91,0.05)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,178,91,0.18)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, inR, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(127,184,255,0.18)';
+    ctx.beginPath(); ctx.arc(cx, cy, outR, 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = 'rgba(127,184,255,0.08)';
+    ctx.beginPath(); ctx.arc(cx, cy, CFG.worldR * scale, 0, Math.PI * 2); ctx.stroke();
+
+    // star
+    const sr = CFG.coronaR * scale, gl = 3.2 * world.luminosity;
+    const glow = ctx.createRadialGradient(cx, cy, sr * 0.3, cx, cy, sr * gl);
+    glow.addColorStop(0, 'rgba(255,220,160,0.9)'); glow.addColorStop(0.25, 'rgba(255,150,70,0.45)'); glow.addColorStop(1, 'rgba(255,100,50,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx, cy, sr * gl, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff1d6'; ctx.beginPath(); ctx.arc(cx, cy, sr * 0.75, 0, Math.PI * 2); ctx.fill();
+
+    // hiding spots
+    for (const h of world.hides) {
+      const [x, y] = toScreen(h.x, h.y); const rr = h.r * scale;
+      const gr = ctx.createRadialGradient(x, y, rr * 0.2, x, y, rr * 1.4);
+      gr.addColorStop(0, 'rgba(70,90,150,0.55)'); gr.addColorStop(0.7, 'rgba(50,65,120,0.35)'); gr.addColorStop(1, 'rgba(40,50,100,0)');
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, rr * 1.4, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // cysts: dormant, drawn as a hollow hexagon in the lineage's color
+    for (const c of world.cysts) {
+      const [x, y] = toScreen(c.x, c.y); const rr = Math.max(2.5, (3 + 5 * c.g[G.size]) * scale * 0.7);
+      ctx.strokeStyle = `hsla(${c.hue},50%,70%,0.7)`; ctx.lineWidth = 1; ctx.beginPath();
+      for (let k = 0; k < 6; k++) { const t = k / 6 * Math.PI * 2; k ? ctx.lineTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr) : ctx.moveTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr); }
+      ctx.closePath(); ctx.stroke();
+    }
+
+    // food
+    for (const f of world.food) {
+      ctx.fillStyle = f.kind === 'plant' ? 'rgba(150,230,170,0.8)' : 'rgba(230,140,120,0.8)';
+      const [x, y] = toScreen(f.x, f.y);
+      const rr = Math.max(1, Math.min(4, f.energy / 14) * scale);
+      ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // organisms
+    for (const o of world.orgs) {
+      const [x, y] = toScreen(o.x, o.y);
+      const rr = o.r * scale;
+      const alpha = (0.45 + 0.55 * Math.max(0, o.energy / o.maxEnergy)) * (o.hidden ? 0.45 : 1);
+      const ag = o.g[G.aggression];
+      // spikes for the aggressive
+      if (ag > 0.45 && o.g[G.diet] < 0.67) {
+        const n = 3 + Math.round(ag * 6);
+        ctx.strokeStyle = `hsla(${o.hue},80%,70%,${alpha})`; ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let k = 0; k < n; k++) { const t = k / n * Math.PI * 2 + o.age * 0.01; ctx.moveTo(x + Math.cos(t) * rr, y + Math.sin(t) * rr); ctx.lineTo(x + Math.cos(t) * (rr + 2 + ag * 4 * scale), y + Math.sin(t) * (rr + 2 + ag * 4 * scale)); }
+        ctx.stroke();
+      }
+      // body shape encodes diet: circle = herbivore, hexagon = omnivore, arrowhead = carnivore
+      const spd = Math.hypot(o.vx, o.vy) || 1, hx = o.vx / spd, hy = o.vy / spd;
+      ctx.fillStyle = `hsla(${o.hue},70%,${55 - 10 * o.g[G.armor]}%,${alpha})`;
+      ctx.beginPath();
+      const diet = o.g[G.diet];
+      if (diet >= 0.67) {
+        const L = rr * 1.45, W = rr * 1.05;
+        ctx.moveTo(x + hx * L, y + hy * L);
+        ctx.lineTo(x - hx * L * 0.6 - hy * W, y - hy * L * 0.6 + hx * W);
+        ctx.lineTo(x - hx * L * 0.25, y - hy * L * 0.25);
+        ctx.lineTo(x - hx * L * 0.6 + hy * W, y - hy * L * 0.6 - hx * W);
+        ctx.closePath();
+      } else if (diet >= 0.33) {
+        const a0 = Math.atan2(hy, hx);
+        for (let k = 0; k < 6; k++) { const t = a0 + k / 6 * Math.PI * 2; const px = x + Math.cos(t) * rr * 1.1, py = y + Math.sin(t) * rr * 1.1; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); }
+        ctx.closePath();
+      } else ctx.arc(x, y, rr, 0, Math.PI * 2);
+      ctx.fill();
+      if (o.g[G.armor] > 0.3) { ctx.strokeStyle = `hsla(${o.hue},40%,85%,${alpha})`; ctx.lineWidth = 1 + o.g[G.armor] * 2.5 * scale; ctx.stroke(); }
+      if (o.infected > 0) { ctx.strokeStyle = 'rgba(160,255,120,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 2.5, 0, Math.PI * 2); ctx.stroke(); }
+      if (o.settling) { ctx.strokeStyle = 'rgba(200,200,255,0.5)'; ctx.setLineDash([2, 2]); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 3, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+      if (o.sprinting) { ctx.strokeStyle = 'rgba(255,120,90,0.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 3, 0, Math.PI * 2); ctx.stroke(); }
+      // heading nub (the arrowhead already shows heading)
+      if (diet < 0.67) {
+        ctx.fillStyle = `rgba(255,255,255,${alpha * 0.8})`;
+        ctx.beginPath(); ctx.arc(x + hx * rr * 0.6, y + hy * rr * 0.6, Math.max(1, rr * 0.25), 0, Math.PI * 2); ctx.fill();
+      }
+      if (o.mateTimer > CFG.mateCooldown - 25) { ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 4 + (CFG.mateCooldown - o.mateTimer) * 0.4, 0, Math.PI * 2); ctx.stroke(); }
+    }
+
+    if (selected && selected.alive) {
+      const [x, y] = toScreen(selected.x, selected.y);
+      ctx.strokeStyle = '#ffb25b'; ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(x, y, selected.r * scale + 7, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,178,91,0.25)';
+      ctx.beginPath(); ctx.arc(x, y, selected.senseR * scale, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  // ── UI ──
+  const $ = id => document.getElementById(id);
+  const fmt = (v, bipolar) => bipolar ? ((v * 2 - 1) >= 0 ? '+' : '') + (v * 2 - 1).toFixed(2) : v.toFixed(2);
+  function traitRows(genome, hue) {
+    return GENES.map((g, i) => {
+      const v = genome[i], bip = g[1];
+      const width = bip ? Math.abs(v - 0.5) * 100 : v * 100;
+      const left = bip ? (v >= 0.5 ? 50 : v * 100) : 0;
+      const color = g[0] === 'hue' ? `hsl(${Math.round(v * 360)},70%,55%)` : (hue != null ? `hsl(${hue},40%,60%)` : 'var(--ink-dim)');
+      return `<div class="trait ${bip ? 'bipolar' : ''}" title="${g[2]}"><span>${g[0]}</span><div class="bar"><i style="width:${width}%;margin-left:${left}%;background:${color}"></i></div><span class="val">${fmt(v, bip)}</span></div>`;
+    }).join('');
+  }
+  const chart = $('chart'), cctx = chart.getContext('2d');
+  function drawChart() {
+    const H = world.history, W = chart.width, Hh = chart.height;
+    cctx.clearRect(0, 0, W, Hh);
+    if (H.length < 2) return;
+    const ids = world.species.map(sp => sp.id);
+    let maxTotal = 1;
+    for (const h of H) { let t = 0; for (const v of h.counts.values()) t += v; maxTotal = Math.max(maxTotal, t); }
+    const xs = i => i / (H.length - 1) * W;
+    const base = new Float32Array(H.length);
+    for (const id of ids) {
+      const sp = world.species.find(x => x.id === id);
+      let any = false; for (const h of H) if (h.counts.get(id)) { any = true; break; }
+      if (!any) continue;
+      cctx.beginPath();
+      for (let i = 0; i < H.length; i++) cctx.lineTo(xs(i), Hh - base[i] / maxTotal * Hh);
+      for (let i = H.length - 1; i >= 0; i--) { base[i] += H[i].counts.get(id) || 0; cctx.lineTo(xs(i), Hh - base[i] / maxTotal * Hh); }
+      cctx.closePath();
+      cctx.fillStyle = `hsla(${sp.hue},65%,55%,0.85)`; cctx.fill();
+    }
+  }
+  function updatePanel() {
+    const s = world.stats;
+    drawChart();
+    const live = world.species.filter(sp => sp.alive && sp.count >= 2).sort((a, b) => b.count - a.count).slice(0, 5);
+    const total = world.orgs.length || 1;
+    $('speciesList').innerHTML = live.map(sp => `<div><span class="swatch" style="background:hsl(${sp.hue},70%,55%)"></span>species ${sp.id} — ${sp.count} (${Math.round(sp.count / total * 100)}%), since ${sp.born.toLocaleString()}</div>`).join('');
+    $('sAlive').textContent = world.orgs.length;
+    { let h = 0, om = 0, c = 0; for (const o of world.orgs) { const d = o.g[G.diet]; if (d < 0.33) h++; else if (d < 0.67) om++; else c++; }
+      $('sDiet').textContent = `${h} / ${om} / ${c}`; }
+    $('sSick').textContent = world.orgs.filter(o => o.infected > 0).length;
+    $('sCysts').textContent = world.cysts.length;
+    $('sLum').textContent = Math.round(world.luminosity * 100) + '%' + (world.flare > 0 ? ' (flare)' : '');
+    $('sSpecies').textContent = world.speciesCount;
+    { let p = 0; for (const f of world.food) if (f.kind === 'plant') p++; $('sFood').textContent = `${p} / ${world.food.length - p}`; }
+    $('sBorn').textContent = s.born; $('sBud').textContent = s.budded; $('sStarve').textContent = s.starved; $('sBurn').textContent = s.burned;
+    $('sFreeze').textContent = s.froze; $('sKilled').textContent = s.killed; $('sAge').textContent = s.oldAge;
+    $('sTick').textContent = world.tick.toLocaleString();
+    $('avgGenes').innerHTML = traitRows(world.averageGenome());
+    $('log').innerHTML = world.events.map(e => `<div>${e}</div>`).join('') || '<div>Nothing yet.</div>';
+    const body = $('inspectBody');
+    if (selected) {
+      const o = selected;
+      body.className = '';
+      const dietName = o.g[G.diet] < 0.33 ? 'herbivore' : o.g[G.diet] < 0.67 ? 'omnivore' : 'carnivore';
+      const status = o.alive ? `${dietName} · energy ${o.energy.toFixed(0)} / ${o.maxEnergy.toFixed(0)} · age ${o.age} of ${o.maxAge.toFixed(0)}${o.infected > 0 ? ' · sick' : ''}${o.settling ? ' · settling to encyst' : ''}${o.hasEncysted ? ' · hatched from a cyst' : ''}` : `${o.cause === 'encysted' ? 'encysted — dormant' : 'died: ' + o.cause}`;
+      body.innerHTML = `<div style="margin-bottom:8px"><span class="swatch" style="background:hsl(${o.hue},70%,55%)"></span><b>#${o.id}</b> generation ${o.generation}, species ${o.species || '?'}${o.hidden ? ', hiding' : ''}<br><span style="color:var(--ink-dim);font-size:12px">${status}<br>${o.kills} kills · ${o.offspring} offspring · orbit ${o.dist.toFixed(0)} (prefers ${o.prefR.toFixed(0)})</span></div>` + traitRows(o.g, o.hue);
+    } else if (body.className !== 'empty') {
+      body.className = 'empty'; body.textContent = 'Nothing selected. Click an organism on the canvas to follow it and read its genome.';
+    }
+  }
+
+  canvas.addEventListener('click', e => {
+    const rect = canvas.getBoundingClientRect();
+    const [wx, wy] = toWorld(e.clientX - rect.left, e.clientY - rect.top);
+    let best = null, bd = 12 / scale;
+    for (const o of world.orgs) { const d = Math.hypot(o.x - wx, o.y - wy) - o.r; if (d < bd) { bd = d; best = o; } }
+    if (e.shiftKey) { if (best) { world.kill(best, 'smitten'); world.log(`#${best.id} smitten by the finger of death`); if (selected === best) selected = null; } }
+    else if (best) selected = best;
+    else world.spawnFood(wx, wy);
+    updatePanel();
+  });
+
+  $('btnPause').addEventListener('click', () => { paused = !paused; $('btnPause').textContent = paused ? 'Resume' : 'Pause'; $('btnPause').classList.toggle('on', paused); });
+  document.querySelectorAll('.speed').forEach(b => b.addEventListener('click', () => { speed = +b.dataset.s; document.querySelectorAll('.speed').forEach(x => x.classList.toggle('on', x === b)); }));
+  $('btnReset').addEventListener('click', () => { world.reset(); selected = null; updatePanel(); });
+
+  function bindSlider(id, valId, key, fmtFn) {
+    const el = $(id); el.value = CFG[key]; $(valId).textContent = fmtFn(CFG[key]);
+    el.addEventListener('input', () => { CFG[key] = +el.value; $(valId).textContent = fmtFn(CFG[key]); });
+  }
+  bindSlider('inFood', 'vFood', 'foodRate', v => v.toFixed(2) + ' / tick');
+  bindSlider('inMut', 'vMut', 'mutationRate', v => Math.round(v * 100) + '% per gene');
+  bindSlider('inMate', 'vMate', 'mateCost', v => Math.round(v * 100) + '% of energy');
+  bindSlider('inDrag', 'vDrag', 'drag', v => v.toFixed(4));
+  bindSlider('inAssim', 'vAssim', 'dietAssimilation', v => Math.round(v * 100) + '%');
+  $('inImm').checked = CFG.immigration; $('inImm').addEventListener('change', () => { CFG.immigration = $('inImm').checked; });
+
+  let frame = 0;
+  function loop() {
+    if (!paused) { acc += speed; while (acc >= 1) { world.step(); acc -= 1; } }
+    draw();
+    if (++frame % 10 === 0) updatePanel();
+    requestAnimationFrame(loop);
+  }
+  updatePanel();
+  loop();
+})();
+</script>
+</body>
+</html>
