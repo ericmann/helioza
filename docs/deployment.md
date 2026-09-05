@@ -10,9 +10,15 @@ Live at [helioza.eamann.com](https://helioza.eamann.com).
 The Git integration is the path worth using: every push deploys, and every
 branch gets its own preview URL.
 
-1. In the Cloudflare dashboard, go to **Workers & Pages**, then
-   **Create** → **Pages** → **Connect to Git**, and pick the repository.
-2. Settings:
+1. In the Cloudflare dashboard, go to **Workers & Pages** → **Create
+   Application**. This lands on the Workers flow, which is not the one you
+   want — it asks for a *Deploy command* and prefills `npx wrangler deploy`,
+   which fails on this repo because there is no Worker to deploy. Look for the
+   small link in the page footer, worded something like **continue to legacy
+   Pages**, and follow that instead. The wording may drift; the giveaway is
+   that the Pages flow asks for a *Build output directory* and never asks for a
+   deploy command.
+2. **Connect to Git**, pick the repository, then:
 
    | Field | Value |
    | --- | --- |
@@ -27,6 +33,32 @@ branch gets its own preview URL.
 There is nothing to install and nothing to compile, so the build finishes in
 seconds. If Cloudflare offers to run `npm install`, decline — the dev
 dependencies are for tests, and the site does not need them.
+
+Pages is in maintenance mode, which is why the dashboard now hides it behind a
+legacy link. It still works and still takes new projects. If that link ever goes
+away, see the Workers route below.
+
+## Cloudflare Workers, if the Pages route goes away
+
+Workers Static Assets serves the same files with no server code. It needs one
+file in the repository root:
+
+```jsonc
+// wrangler.jsonc
+{
+  "name": "helioza",
+  "compatibility_date": "2026-09-03",
+  "assets": { "directory": "./public" }
+}
+```
+
+With that committed, the Workers flow's prefilled `npx wrangler deploy` is
+correct and the build command stays empty. Verified with
+`npx wrangler deploy --dry-run`, which reads `public/` and reports no bindings.
+
+Without it, `npx wrangler deploy` fails outright. The shortcuts do not help
+either: `--assets=./public` still wants a compatibility date, and adding
+`--name` does not change that. The config file is the shortest route.
 
 ## Cloudflare Pages, from the command line
 
