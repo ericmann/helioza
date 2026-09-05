@@ -146,3 +146,16 @@ docs/
 The five simulation modules have no DOM references and never import from
 `render.js`, `chart.js` or `ui.js`. That is what lets `world.js` be imported
 straight into node, and it is worth preserving.
+
+## Repository metadata
+
+Kept here so it is reproducible rather than a thing someone once clicked.
+
+```
+gh repo edit \
+  --description "Artificial life in orbit around a star: evolving genomes, predators, plagues, and cysts. Zero-dependency browser sandbox." \
+  --homepage "https://helioza.eamann.com" \
+  --add-topic artificial-life --add-topic evolution --add-topic simulation \
+  --add-topic genetic-algorithm --add-topic canvas --add-topic javascript \
+  --add-topic es-modules --add-topic cloudflare-pages --add-topic idle-game
+```
