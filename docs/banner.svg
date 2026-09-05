@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" width="1200" height="300" role="img" aria-label="Heliozoa: artificial life in orbit around a star">
+<title>Heliozoa</title>
+<defs>
+  <radialGradient id="void" cx="17%" cy="50%" r="95%">
+    <stop offset="0%" stop-color="#101a34"/>
+    <stop offset="50%" stop-color="#070c1c"/>
+    <stop offset="100%" stop-color="#03050e"/>
+  </radialGradient>
+  <radialGradient id="corona">
+    <stop offset="0%" stop-color="#fff6e6"/>
+    <stop offset="14%" stop-color="#ffd694" stop-opacity="0.9"/>
+    <stop offset="34%" stop-color="#ff9c4c" stop-opacity="0.38"/>
+    <stop offset="62%" stop-color="#ff6a3d" stop-opacity="0.12"/>
+    <stop offset="100%" stop-color="#ff5a30" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="bandfill" cx="50%" cy="50%" r="50%">
+    <stop offset="67%" stop-color="#ffb25b" stop-opacity="0.17"/>
+    <stop offset="77%" stop-color="#ffb25b" stop-opacity="0.09"/>
+    <stop offset="100%" stop-color="#7fb8ff" stop-opacity="0.06"/>
+  </radialGradient>
+  <linearGradient id="ink" x1="0" y1="0" x2="0.85" y2="1">
+    <stop offset="0%" stop-color="#ffe3bd"/>
+    <stop offset="38%" stop-color="#ffb25b"/>
+    <stop offset="100%" stop-color="#ff6a3d"/>
+  </linearGradient>
+</defs>
+
+<rect width="1200" height="300" fill="url(#void)"/>
+<g fill="#cfd8ff"><circle cx="543" cy="167" r="1.0" opacity="0.4"/><circle cx="1023" cy="59" r="1.2" opacity="0.41"/><circle cx="736" cy="58" r="1.0" opacity="0.32"/><circle cx="831" cy="16" r="1.0" opacity="0.68"/><circle cx="783" cy="184" r="0.7" opacity="0.49"/><circle cx="995" cy="22" r="0.6" opacity="0.25"/><circle cx="292" cy="13" r="1.0" opacity="0.33"/><circle cx="708" cy="61" r="0.7" opacity="0.5"/><circle cx="600" cy="197" r="1.0" opacity="0.51"/><circle cx="489" cy="165" r="0.6" opacity="0.54"/><circle cx="380" cy="71" r="0.8" opacity="0.17"/><circle cx="675" cy="36" r="0.6" opacity="0.62"/><circle cx="465" cy="284" r="0.6" opacity="0.27"/><circle cx="1109" cy="19" r="1.0" opacity="0.69"/><circle cx="478" cy="25" r="0.7" opacity="0.58"/><circle cx="326" cy="29" r="0.8" opacity="0.16"/><circle cx="493" cy="273" r="0.7" opacity="0.29"/><circle cx="124" cy="21" r="1.0" opacity="0.25"/><circle cx="671" cy="135" r="0.7" opacity="0.69"/><circle cx="921" cy="126" r="1.0" opacity="0.21"/><circle cx="506" cy="66" r="0.8" opacity="0.63"/><circle cx="1166" cy="177" r="0.6" opacity="0.27"/><circle cx="474" cy="253" r="1.2" opacity="0.21"/><circle cx="1183" cy="66" r="0.8" opacity="0.16"/><circle cx="732" cy="246" r="1.0" opacity="0.19"/><circle cx="447" cy="136" r="1.2" opacity="0.42"/><circle cx="689" cy="257" r="0.7" opacity="0.49"/><circle cx="374" cy="71" r="1.2" opacity="0.29"/><circle cx="1125" cy="61" r="1.0" opacity="0.64"/><circle cx="723" cy="127" r="0.6" opacity="0.21"/><circle cx="615" cy="79" r="1.0" opacity="0.29"/><circle cx="986" cy="178" r="0.8" opacity="0.44"/><circle cx="1112" cy="289" r="0.7" opacity="0.28"/><circle cx="671" cy="253" r="1.2" opacity="0.19"/><circle cx="257" cy="271" r="0.6" opacity="0.19"/><circle cx="494" cy="77" r="0.6" opacity="0.25"/><circle cx="444" cy="171" r="0.7" opacity="0.2"/><circle cx="399" cy="218" r="1.2" opacity="0.47"/><circle cx="171" cy="14" r="0.6" opacity="0.41"/><circle cx="430" cy="95" r="0.6" opacity="0.16"/><circle cx="762" cy="145" r="0.8" opacity="0.33"/><circle cx="1195" cy="26" r="1.2" opacity="0.35"/><circle cx="57" cy="277" r="0.7" opacity="0.59"/><circle cx="1095" cy="107" r="1.0" opacity="0.65"/><circle cx="1042" cy="126" r="0.6" opacity="0.62"/><circle cx="687" cy="186" r="1.0" opacity="0.36"/><circle cx="19" cy="25" r="0.6" opacity="0.5"/><circle cx="1188" cy="261" r="0.8" opacity="0.36"/><circle cx="880" cy="174" r="1.0" opacity="0.4"/><circle cx="649" cy="155" r="1.2" opacity="0.17"/><circle cx="721" cy="144" r="0.7" opacity="0.68"/><circle cx="791" cy="146" r="0.6" opacity="0.35"/><circle cx="622" cy="224" r="0.8" opacity="0.51"/><circle cx="531" cy="264" r="0.8" opacity="0.37"/><circle cx="962" cy="224" r="0.7" opacity="0.63"/><circle cx="462" cy="174" r="0.8" opacity="0.27"/><circle cx="1072" cy="16" r="0.6" opacity="0.67"/><circle cx="334" cy="53" r="1.0" opacity="0.41"/><circle cx="1107" cy="247" r="1.0" opacity="0.49"/><circle cx="593" cy="96" r="1.2" opacity="0.4"/><circle cx="93" cy="13" r="1.2" opacity="0.17"/><circle cx="849" cy="171" r="0.8" opacity="0.51"/><circle cx="676" cy="191" r="1.0" opacity="0.4"/><circle cx="33" cy="246" r="0.7" opacity="0.58"/><circle cx="954" cy="291" r="0.6" opacity="0.4"/><circle cx="755" cy="195" r="0.8" opacity="0.68"/><circle cx="820" cy="62" r="1.0" opacity="0.29"/><circle cx="855" cy="224" r="1.2" opacity="0.54"/><circle cx="416" cy="208" r="1.2" opacity="0.43"/><circle cx="1192" cy="50" r="0.7" opacity="0.2"/><circle cx="1116" cy="215" r="0.7" opacity="0.4"/><circle cx="12" cy="165" r="1.2" opacity="0.59"/><circle cx="1130" cy="139" r="0.7" opacity="0.2"/><circle cx="1036" cy="237" r="0.6" opacity="0.27"/><circle cx="1077" cy="290" r="0.8" opacity="0.45"/><circle cx="947" cy="98" r="0.6" opacity="0.34"/><circle cx="660" cy="228" r="1.0" opacity="0.66"/><circle cx="515" cy="14" r="1.2" opacity="0.33"/><circle cx="943" cy="45" r="0.7" opacity="0.7"/><circle cx="1077" cy="155" r="1.0" opacity="0.67"/><circle cx="591" cy="281" r="0.6" opacity="0.57"/><circle cx="528" cy="167" r="1.2" opacity="0.5"/><circle cx="627" cy="250" r="1.2" opacity="0.29"/><circle cx="804" cy="283" r="1.2" opacity="0.26"/><circle cx="1018" cy="287" r="1.2" opacity="0.3"/><circle cx="597" cy="124" r="0.6" opacity="0.43"/><circle cx="725" cy="12" r="0.6" opacity="0.43"/><circle cx="481" cy="238" r="1.2" opacity="0.22"/><circle cx="115" cy="53" r="1.2" opacity="0.4"/><circle cx="1102" cy="238" r="1.0" opacity="0.3"/><circle cx="568" cy="41" r="1.0" opacity="0.65"/><circle cx="1119" cy="273" r="1.2" opacity="0.32"/><circle cx="1107" cy="42" r="0.6" opacity="0.17"/><circle cx="189" cy="7" r="0.8" opacity="0.33"/><circle cx="428" cy="185" r="0.6" opacity="0.42"/><circle cx="698" cy="253" r="1.2" opacity="0.29"/><circle cx="525" cy="114" r="1.0" opacity="0.6"/><circle cx="738" cy="161" r="1.2" opacity="0.5"/><circle cx="635" cy="253" r="1.2" opacity="0.47"/><circle cx="752" cy="105" r="0.7" opacity="0.32"/><circle cx="379" cy="273" r="0.7" opacity="0.58"/><circle cx="1064" cy="43" r="0.6" opacity="0.29"/><circle cx="507" cy="235" r="0.7" opacity="0.26"/><circle cx="753" cy="237" r="0.6" opacity="0.26"/><circle cx="817" cy="270" r="0.8" opacity="0.21"/><circle cx="607" cy="225" r="1.2" opacity="0.7"/><circle cx="997" cy="238" r="1.0" opacity="0.21"/><circle cx="49" cy="165" r="1.2" opacity="0.65"/><circle cx="578" cy="59" r="0.6" opacity="0.26"/><circle cx="1006" cy="293" r="0.6" opacity="0.47"/></g>
+
+<circle cx="205" cy="150" r="252" fill="url(#bandfill)"/>
+<circle cx="205" cy="150" r="168" fill="#070c1c" fill-opacity="0.72"/>
+<circle cx="205" cy="150" r="168" fill="none" stroke="#ffb25b" stroke-opacity="0.34" stroke-width="1.1"/>
+<circle cx="205" cy="150" r="252" fill="none" stroke="#7fb8ff" stroke-opacity="0.30" stroke-width="1.1"/>
+<circle cx="205" cy="150" r="316" fill="none" stroke="#7fb8ff" stroke-opacity="0.09" stroke-width="1"/>
+
+<circle cx="205" cy="150" r="132" fill="url(#corona)"/>
+<circle cx="205" cy="150" r="19" fill="#fff3dc"/>
+
+<g>
+  <polygon points="374.4,42.9 355.1,30.6 364.9,29.8 368.7,20.8" fill="hsl(352,72%,60%)" opacity="0.98"/>
+  <polygon points="402.0,42.8 386.2,30.8 394.6,30.8 398.5,23.2" fill="hsl(352,72%,60%)" opacity="0.92"/>
+  <circle cx="394.7" cy="69.8" r="6.4" fill="hsl(168,72%,60%)" opacity="0.95"/>
+  <circle cx="420.7" cy="76.1" r="5.6" fill="hsl(168,72%,60%)" opacity="0.92"/>
+  <circle cx="410.8" cy="95.2" r="5.0" fill="hsl(168,72%,60%)" opacity="0.88"/>
+  <polygon points="433.8,209.2 430.0,187.9 436.8,194.2 445.6,191.1" fill="hsl(30,72%,60%)" opacity="0.96"/>
+  <circle cx="421.2" cy="231.4" r="6.0" fill="hsl(96,72%,60%)" opacity="0.93"/>
+  <circle cx="424.7" cy="256.1" r="5.2" fill="hsl(96,72%,60%)" opacity="0.88"/>
+  <polygon points="391.0,159.3 387.6,164.5 381.4,164.2 378.6,158.7 381.9,153.5 388.1,153.8" fill="hsl(46,72%,60%)" opacity="0.9"/>
+  <circle cx="69.5" cy="26.8" r="4.0" fill="hsl(168,72%,60%)" opacity="0.75"/>
+  <circle cx="385.1" cy="103.9" r="3.0" fill="hsl(168,72%,60%)" opacity="0.64"/>
+  <polygon points="16.9,37.0 19.1,35.7 21.3,37.0 21.2,39.5 19.0,40.7 16.9,39.5" fill="hsl(268,72%,60%)" opacity="0.77"/>
+  <circle cx="429.8" cy="59.4" r="3.1" fill="hsl(320,72%,60%)" opacity="0.56"/>
+  <circle cx="51.2" cy="67.3" r="2.7" fill="hsl(168,72%,60%)" opacity="0.45"/>
+  <circle cx="392.3" cy="124.4" r="3.1" fill="hsl(96,72%,60%)" opacity="0.55"/>
+  <circle cx="394.5" cy="52.2" r="3.0" fill="hsl(96,72%,60%)" opacity="0.76"/>
+  <circle cx="387.7" cy="182.0" r="3.6" fill="hsl(168,72%,60%)" opacity="0.74"/>
+  <circle cx="44.2" cy="258.7" r="2.6" fill="hsl(268,72%,60%)" opacity="0.83"/>
+  <circle cx="18.9" cy="89.6" r="3.3" fill="hsl(200,72%,60%)" opacity="0.83"/>
+  <polygon points="404.5,122.2 398.3,111.9 403.1,113.8 406.9,110.4" fill="hsl(200,72%,60%)" opacity="0.73"/>
+  <circle cx="383.1" cy="195.7" r="3.3" fill="hsl(200,72%,60%)" opacity="0.51"/>
+  <circle cx="30.7" cy="178.4" r="3.9" fill="hsl(200,72%,60%)" opacity="0.53"/>
+  <polygon points="40.3,17.1 43.5,15.8 46.2,18.0 45.7,21.5 42.4,22.8 39.7,20.6" fill="hsl(46,72%,60%)" opacity="0.41"/>
+  <polygon points="344.0,290.8 340.6,291.7 338.1,289.2 339.1,285.8 342.4,284.9 344.9,287.4" fill="hsl(28,72%,60%)" opacity="0.61"/>
+  <polygon points="355.9,245.6 357.3,236.7 359.1,240.1 363.0,240.0" fill="hsl(320,72%,60%)" opacity="0.84"/>
+  <circle cx="429.5" cy="147.7" r="3.9" fill="hsl(168,72%,60%)" opacity="0.68"/>
+  <circle cx="48.5" cy="19.5" r="3.5" fill="hsl(28,72%,60%)" opacity="0.65"/>
+  <circle cx="337.7" cy="23.0" r="3.0" fill="hsl(352,72%,60%)" opacity="0.62"/>
+  <circle cx="391.1" cy="74.3" r="3.7" fill="hsl(96,72%,60%)" opacity="0.66"/>
+  <polygon points="19.6,87.6 22.1,85.4 25.2,86.5 25.9,89.7 23.4,91.9 20.3,90.8" fill="hsl(96,72%,60%)" opacity="0.76"/>
+  <circle cx="396.0" cy="263.3" r="2.6" fill="hsl(352,72%,60%)" opacity="0.51"/>
+</g>
+
+<g font-family="Avenir Next, Futura, Century Gothic, Segoe UI, Roboto, system-ui, -apple-system, Helvetica Neue, Arial, sans-serif">
+  <text x="500" y="172" font-size="102" font-weight="600" letter-spacing="12.5" fill="url(#ink)">HELIOZOA</text>
+  <text x="506" y="216" font-size="19" font-weight="400" letter-spacing="5.2" fill="#8a90a8">ARTIFICIAL LIFE IN ORBIT AROUND A STAR</text>
+</g>
+</svg>
