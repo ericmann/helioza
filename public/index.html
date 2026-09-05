@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Heliozoa — an artificial-life sandbox</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="stage">
+  <canvas id="c"></canvas>
+  <div id="hint">circles graze, hexagons are omnivores, arrowheads hunt · color is lineage · green dots are plants, red are carrion · hollow hexagons are dormant cysts · dark clouds are hiding spots<br>click to inspect · shift-click to kill · click empty space to drop a plant</div>
+</div>
+<aside>
+  <h1>Heliozoa <small>organisms evolving in orbit around a star</small></h1>
+
+  <div class="row">
+    <button id="btnPause">Pause</button>
+    <button id="btnSpeedH" class="speed on" data-s="0.5">½×</button>
+    <button id="btnSpeed1" class="speed" data-s="1">1×</button>
+    <button id="btnSpeed4" class="speed" data-s="4">4×</button>
+    <button id="btnSpeed16" class="speed" data-s="16">16×</button>
+    <button id="btnReset" class="danger">Restart</button>
+  </div>
+
+  <div>
+    <h2>Population</h2>
+    <div class="stats">
+      <span>Alive</span><span id="sAlive">0</span>
+      <span class="dim">herbivores / omnivores / carnivores</span><span id="sDiet" class="dim">0 / 0 / 0</span>
+      <span class="dim">Infected</span><span id="sSick" class="dim">0</span>
+      <span class="dim">Dormant cysts</span><span id="sCysts" class="dim">0</span>
+      <span>Star output</span><span id="sLum">100%</span>
+      <span>Species</span><span id="sSpecies">0</span>
+      <span>Plants / carrion</span><span id="sFood">0 / 0</span>
+      <span>Born</span><span id="sBorn">0</span>
+      <span class="dim">of which budded</span><span id="sBud" class="dim">0</span>
+      <span class="dim">Starved</span><span id="sStarve" class="dim">0</span>
+      <span class="dim">Burned</span><span id="sBurn" class="dim">0</span>
+      <span class="dim">Froze</span><span id="sFreeze" class="dim">0</span>
+      <span class="dim">Killed</span><span id="sKilled" class="dim">0</span>
+      <span class="dim">Old age</span><span id="sAge" class="dim">0</span>
+      <span class="dim">Time</span><span id="sTick" class="dim">0</span>
+    </div>
+  </div>
+
+  <div>
+    <h2>Species over time</h2>
+    <canvas id="chart" width="264" height="90" style="width:100%;height:90px;display:block;border-radius:4px;background:#0a0e1a"></canvas>
+    <div id="speciesList" style="font-size:12px;color:var(--ink-dim);margin-top:6px;line-height:1.6"></div>
+  </div>
+
+  <div>
+    <h2>Average genome</h2>
+    <div id="avgGenes"></div>
+  </div>
+
+  <div>
+    <h2>Environment</h2>
+    <label class="slider">Food supply <b id="vFood"></b><input id="inFood" type="range" min="0" max="1" step="0.01"></label>
+    <label class="slider">Mutation rate <b id="vMut"></b><input id="inMut" type="range" min="0" max="1" step="0.01"></label>
+    <label class="slider">Mating cost <b id="vMate"></b><input id="inMate" type="range" min="0.05" max="0.6" step="0.01"></label>
+    <label class="slider">Orbital drag <b id="vDrag"></b><input id="inDrag" type="range" min="0" max="0.01" step="0.0005"></label>
+    <label class="slider">Diet assimilation <b id="vAssim"></b><input id="inAssim" type="range" min="0" max="0.8" step="0.05"></label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:12px;margin-top:8px"><input id="inImm" type="checkbox" style="accent-color:var(--star)"> Airlift a new family if population collapses</label>
+  </div>
+
+  <div id="inspect">
+    <h2>Selected organism</h2>
+    <div id="inspectBody" class="empty">Nothing selected. Click an organism on the canvas to follow it and read its genome.</div>
+  </div>
+
+  <div>
+    <h2>Events</h2>
+    <div id="log"></div>
+  </div>
+</aside>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
