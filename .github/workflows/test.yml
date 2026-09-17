@@ -13,7 +13,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: .node-version
+          # Not .node-version: Cloudflare Pages reads that file for its own
+          # build, and vitest 4's rolldown bindings need Node >= 22.12.
+          node-version: 22
           cache: npm
 
       - run: npm ci
