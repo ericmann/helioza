@@ -50,7 +50,8 @@ export function updatePanel(world, view) {
     const o = selected;
     body.className = '';
     const dietName = o.g[G.diet] < 0.33 ? 'herbivore' : o.g[G.diet] < 0.67 ? 'omnivore' : 'carnivore';
-    const status = o.alive ? `${dietName} · energy ${o.energy.toFixed(0)} / ${o.maxEnergy.toFixed(0)} · age ${o.age} of ${o.maxAge.toFixed(0)}${o.infected > 0 ? ' · sick' : ''}${o.settling ? ' · settling to encyst' : ''}${o.hasEncysted ? ' · hatched from a cyst' : ''}` : `${o.cause === 'encysted' ? 'encysted — dormant' : 'died: ' + o.cause}`;
+    const huntStatus = o.hunting ? (o.prey ? ` · hunting #${o.prey.id}` : ' · hunting') : (world.tick < o.avoidUntil ? ' · resting after a chase' : '');
+    const status = o.alive ? `${dietName} · energy ${o.energy.toFixed(0)} / ${o.maxEnergy.toFixed(0)} · age ${o.age} of ${o.maxAge.toFixed(0)}${o.infected > 0 ? ' · sick' : ''}${o.settling ? ' · settling to encyst' : ''}${o.hasEncysted ? ' · hatched from a cyst' : ''}${huntStatus}${o.guarding ? ' · guarding' : ''}${o.alarmed ? ' · alarmed' : (o.threatened ? ' · threatened' : '')}${o.herdN ? ` · herd of ${o.herdN + 1}` : ''}` : `${o.cause === 'encysted' ? 'encysted — dormant' : 'died: ' + o.cause}`;
     body.innerHTML = `<div style="margin-bottom:8px"><span class="swatch" style="background:hsl(${o.hue},70%,55%)"></span><b>#${o.id}</b> generation ${o.generation}, species ${o.species || '?'}${o.hidden ? ', hiding' : ''}<br><span style="color:var(--ink-dim);font-size:12px">${status}<br>${o.kills} kills · ${o.offspring} offspring · orbit ${o.dist.toFixed(0)} (prefers ${o.prefR.toFixed(0)})</span></div>` + traitRows(o.g, o.hue);
   } else if (body.className !== 'empty') {
     body.className = 'empty'; body.textContent = 'Nothing selected. Click an organism on the canvas to follow it and read its genome.';

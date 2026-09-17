@@ -43,13 +43,13 @@ npm test           # vitest run, ~95 seconds
 npm run test:watch
 ```
 
-Five files, 87 tests:
+Five files, 98 tests:
 
 | File | Environment | What it covers |
 | --- | --- | --- |
 | `test/genome.test.js` | node | Crossover, mutation bounds, the big-mutation rate, diet assimilation, kin distance. |
 | `test/organism.test.js` | node | Every derived trait, checked against the direction its comment claims. |
-| `test/world.test.js` | node | Orbits, temperature damage, plant regrowth, predation, hiding, disease, encysting, hatching, budding, speciation. |
+| `test/world.test.js` | node | Orbits, temperature damage, plant regrowth, predation, hunting, herding, group flight, packs, hiding, disease, encysting, hatching, budding, speciation. |
 | `test/ecology.test.js` | node | 30,000 ticks from seed 12, asserting the run stays sane and stays alive. |
 | `test/ui.test.js` | jsdom | The page boots, counters update, clicks select, sliders write through. |
 
@@ -80,14 +80,20 @@ counter, and the last few log events. A range prints one row per seed, which is
 how the pinned test seed was chosen:
 
 ```
-  seed   pop  peak  cysts   h/o/c        gen  species  born  killed  starved  extinct at
-    11   158   249     24     147/4/7     33        3  2235     100      870           —
-    12   182   242     51    161/4/17     44        4  2745     164     1016           —
-    13    60   258     18     36/0/24     44        3  2116     979      342           —
+  seed   pop  peak  cysts   h/o/c        gen  species  born  killed  starved   herd  hunt%  hold  alarms guards  extinct at
+    11   142   208     49    127/1/14     29        2  1652     497      400   1.69   10%   14%   57375   1573           —
+    12   127   263     33     126/0/1     35        2  2152     123      776   1.17   11%    0%   12308    385           —
+    13     0   165      0       0/0/0      0        0   860     480      156   0.00   17%    0%   64938   1104       29320
 ```
 
-Expect roughly a third of seeds to be extinct by tick 13,000. That is the
-founder crash, not a bug — see [design.md](design.md).
+Expect roughly a third of seeds to be extinct, most of them the classic way in
+the first food crash around tick 12,000, but not always: seed 13 above makes it
+to tick 29,320, most of the way to the end, before a late-game predation
+collapse takes the whole population down instead. Both are the founder crash
+and its consequences, not a bug — see [design.md](design.md). `herd` is the
+mean number of kin within `herdR` per herbivore; `hunt%` is kills divided by
+hunts started; `hold` is the fraction of hunters holding a target at the end of the
+run.
 
 ## Verifying a change to the core
 
@@ -109,11 +115,22 @@ node scripts/verify-faithful.mjs --self        # check the harness itself
 must diverge. Run it when you suspect the comparison has stopped comparing
 anything.
 
-Run `npm run verify` after any change to `config.js`, `rng.js`, `genome.js`,
-`organism.js` or `world.js`. If it fails, either the change altered behaviour —
-which for a refactor means it is wrong — or the change was a deliberate
-alteration to the ecology, in which case the honest move is to say so in the
-commit and retire the check for that mechanic rather than quietly loosening it.
+**This check only holds up to the commit tagged `faithful-to-original`.** The
+hunting and herding work built on top of it (persistent hunt targets, herd
+cohesion, alarm propagation, guarding) is a deliberate change to the ecology,
+not a refactor, and `npm run verify` fails past that point by design — see
+"Why `huntStop` sits at 75%, not 90%" and the "`perceive → propagate → steer`"
+section in [design.md](design.md) for what changed and why. The CI step that
+ran it on every push was removed at the same commit. `scripts/verify-faithful.mjs`
+and `scripts/original.html` stay in the repository; run the check by hand
+against `faithful-to-original` if you need to confirm the refactor itself was
+sound.
+
+For a future change to `config.js`, `rng.js`, `genome.js`, `organism.js` or
+`world.js` that is meant to be behaviour-preserving, the same principle still
+applies: run `npm run verify` against the last commit where it passed, and if
+it fails, either the change is wrong or it is a deliberate alteration — say so
+in the commit rather than quietly loosening the check.
 
 The order and count of calls into `rng.js` is what makes this work. Adding,
 removing or reordering a random draw in the simulation will shift the entire

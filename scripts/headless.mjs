@@ -39,14 +39,20 @@ function run(seed, ticks) {
     if (extinctAt === null && world.orgs.length === 0 && world.cysts.length === 0) extinctAt = world.tick;
   }
   let herb = 0, omni = 0, carn = 0, size = 0, gen = 0, plants = 0;
+  let herdSum = 0, hunters = 0, huntersHolding = 0;
   for (const o of world.orgs) {
     const d = o.g[G.diet];
-    if (d < 0.33) herb++; else if (d < 0.67) omni++; else carn++;
+    if (d < 0.33) { herb++; herdSum += o.herdN; } else if (d < 0.67) omni++; else carn++;
     size += o.g[G.size];
     gen = Math.max(gen, o.generation);
+    const canHunt = o.g[G.aggression] > 0.45 && o.meatEff > 0.3;
+    if (canHunt) { hunters++; if (o.hunting && o.prey) huntersHolding++; }
   }
   for (const f of world.food) if (f.kind === 'plant') plants++;
   const n = world.orgs.length || 1;
+  const herd = herb ? herdSum / herb : 0;
+  const hunting = hunters ? huntersHolding / hunters : 0;
+  const huntPct = world.stats.hunts ? world.stats.killed / world.stats.hunts : 0;
   return {
     seed, ticks, peak, extinctAt,
     pop: world.orgs.length, cysts: world.cysts.length,
@@ -56,6 +62,7 @@ function run(seed, ticks) {
     topGeneration: gen,
     species: world.speciesCount,
     lineages: world.species.length,
+    herd, hunting, huntPct,
     stats: world.stats,
     events: world.events,
   };
@@ -65,12 +72,14 @@ const pad = (s, n) => String(s).padStart(n);
 
 if (SEEDS.length > 1) {
   console.log(`${TICKS.toLocaleString()} ticks per seed\n`);
-  console.log('  seed   pop  peak  cysts   h/o/c        gen  species  born  killed  starved  extinct at');
+  console.log('  seed   pop  peak  cysts   h/o/c        gen  species  born  killed  starved   herd  hunt%  hold  alarms guards  extinct at');
   for (const seed of SEEDS) {
     const r = run(seed, TICKS);
     console.log(`  ${pad(r.seed, 4)}  ${pad(r.pop, 4)}  ${pad(r.peak, 4)}  ${pad(r.cysts, 5)}  ` +
       `${pad(`${r.herb}/${r.omni}/${r.carn}`, 10)}  ${pad(r.topGeneration, 5)}  ${pad(r.species, 7)}  ` +
-      `${pad(r.stats.born, 4)}  ${pad(r.stats.killed, 6)}  ${pad(r.stats.starved, 7)}  ${pad(r.extinctAt ?? '—', 10)}`);
+      `${pad(r.stats.born, 4)}  ${pad(r.stats.killed, 6)}  ${pad(r.stats.starved, 7)}  ${pad(r.herd.toFixed(2), 5)}  ` +
+      `${pad(Math.round(r.huntPct * 100) + '%', 4)}  ${pad(Math.round(r.hunting * 100) + '%', 4)}  ` +
+      `${pad(r.stats.alarms, 6)}  ${pad(r.stats.guards, 6)}  ${pad(r.extinctAt ?? '—', 10)}`);
   }
 } else {
   const r = run(SEEDS[0], TICKS);
@@ -82,6 +91,9 @@ if (SEEDS.length > 1) {
   console.log(`  mean size gene   ${r.avgSize.toFixed(3)}`);
   console.log(`  top generation   ${r.topGeneration}`);
   console.log(`  species now      ${r.species}   (${r.lineages} ever recorded)`);
+  console.log(`  herd density     ${r.herd.toFixed(2)} kin within herdR, per herbivore`);
+  console.log(`  hunters holding  ${Math.round(r.hunting * 100)}% of hunters have a target`);
+  console.log(`  hunt success     ${Math.round(r.huntPct * 100)}% of hunts end in a kill`);
   console.log(`  first extinction ${r.extinctAt ?? 'never'}`);
   console.log('');
   for (const [k, v] of Object.entries(r.stats)) console.log(`  ${k.padEnd(16)} ${v}`);

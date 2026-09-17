@@ -446,6 +446,207 @@ describe('hatching', () => {
   });
 });
 
+describe('hunting', () => {
+  const predator = (world, energyFraction = 1) => place(world,
+    gene({ diet: 1, aggression: 1, size: 0.6, sense: 1, speed: 0.6 }), 250, { energyFraction });
+  const target = (world, angle) => place(world, gene({ size: 0.1 }), 250, { angle, energyFraction: 1 });
+
+  it('starts hunting below huntStart, holds through the band, and stops above huntStop', () => {
+    const world = bareWorld(3, QUIET);
+    const o = predator(world, 0.5);
+    o.energy = o.maxEnergy * (CFG.huntStart - 0.05);
+    world.step();
+    expect(o.hunting).toBe(true);
+
+    o.energy = o.maxEnergy * ((CFG.huntStart + CFG.huntStop) / 2);   // inside the hysteresis band
+    world.step();
+    expect(o.hunting).toBe(true);
+
+    o.energy = o.maxEnergy * (CFG.huntStop + 0.05);
+    world.step();
+    expect(o.hunting).toBe(false);
+  });
+
+  it('keeps the current target unless a candidate scores well below it', () => {
+    const world = bareWorld(3, QUIET);
+    const o = predator(world);
+    o.energy = o.maxEnergy * 0.3;
+    const a = target(world, 0.2);     // ~50 units away
+    const b = target(world, -0.19);   // ~47.5 units away — only marginally closer
+    o.prey = a; o.huntSince = 0;
+    world.step();
+    expect(o.prey).toBe(a);
+
+    const c = target(world, 0.02);    // ~5 units away — much closer
+    world.step();
+    expect(o.prey).toBe(c);
+  });
+
+  it('abandons a chase after huntGiveUp ticks and rests before re-targeting the same prey', () => {
+    const world = bareWorld(3, QUIET);
+    const o = predator(world);
+    o.energy = o.maxEnergy * 0.3;
+    const a = target(world, 0.2);
+    o.prey = a; o.huntSince = 0;
+    world.tick = CFG.huntGiveUp;       // step() advances the tick past huntGiveUp before checking
+    world.step();
+    expect(o.prey).toBe(null);
+    expect(world.stats.huntsAbandoned).toBe(1);
+    expect(o.avoidId).toBe(a.id);
+
+    world.step();                      // still resting — does not re-acquire the same prey
+    expect(o.prey).toBeNull();
+  });
+
+  it('prefers an isolated straggler over an equally-distant herd member', () => {
+    const world = bareWorld(3, QUIET);
+    const o = predator(world);
+    o.energy = o.maxEnergy * 0.3;
+
+    const lone = target(world, 0.1);                                  // alone, ~25 units out
+    const kinGenome = { size: 0.1, hue: 0.8, marker1: 0.8, marker2: 0.8, diet: 0 };
+    // a tight trio on the far side, at very nearly the same distance from the
+    // predator (angle -0.10 ± 0.01) so the outcome turns on herd membership,
+    // not on one of them happening to be closer
+    const herded = place(world, gene(kinGenome), 250, { angle: -0.11, energyFraction: 1 });
+    place(world, gene(kinGenome), 250, { angle: -0.14, energyFraction: 1 });
+    place(world, gene(kinGenome), 250, { angle: -0.17, energyFraction: 1 });
+
+    world.step();                       // let herdN settle for everyone once
+    expect(herded.herdN).toBeGreaterThan(0);
+    expect(lone.herdN).toBe(0);
+
+    o.prey = null; o.huntSince = 0;
+    world.step();
+    expect(o.prey).toBe(lone);
+  });
+});
+
+describe('herding', () => {
+  const flatCfg = { ...QUIET, gravity: 0 };
+  const kin = (extra = {}) => gene({ hue: 0.5, marker1: 0.5, marker2: 0.5, diet: 0, size: 0.1, speed: 0.8, sense: 0.4, ...extra });
+  const put = (world, g, x) => { const o = place(world, g, 250, { still: true, energyFraction: 1 }); o.x = x; o.y = 0; return o; };
+
+  it('draws relatives together when kinDrive is high, apart when it is low', () => {
+    const together = bareWorld(4, flatCfg);
+    const t1 = put(together, kin({ kinDrive: 1 }), 200);
+    put(together, kin({ kinDrive: 1 }), 240);
+    const t3 = put(together, kin({ kinDrive: 1 }), 280);
+    const before = Math.abs(t1.x - t3.x);
+    for (let i = 0; i < 50; i++) together.step();
+    expect(Math.abs(t1.x - t3.x)).toBeLessThan(before);
+
+    const apart = bareWorld(4, flatCfg);
+    const a1 = put(apart, kin({ kinDrive: 0 }), 200);
+    put(apart, kin({ kinDrive: 0 }), 240);
+    const a3 = put(apart, kin({ kinDrive: 0 }), 280);
+    for (let i = 0; i < 50; i++) apart.step();
+    expect(Math.abs(a1.x - a3.x)).toBeGreaterThan(before);
+  });
+
+  it('separation keeps close relatives from settling on top of each other', () => {
+    const world = bareWorld(4, flatCfg);
+    const p = put(world, kin({ kinDrive: 1 }), 250);
+    const q = put(world, kin({ kinDrive: 1 }), 256);   // 6 apart — well inside sepFactor × (rp + rq)
+    for (let i = 0; i < 5; i++) world.step();
+    expect(Math.hypot(q.x - p.x, q.y - p.y)).toBeGreaterThan(6);
+  });
+
+  it('pulls toward the nearest relative when it is out of herdR but still in sense range', () => {
+    const world = bareWorld(4, flatCfg);
+    const p = put(world, kin({ kinDrive: 1 }), 250);
+    const q = put(world, kin({ kinDrive: 1 }), 320);   // 70 apart: outside herdR (55), inside senseR (90)
+    world.step();
+    expect(p.herdN).toBe(0);
+    const before = Math.hypot(q.x - p.x, q.y - p.y);
+    for (let i = 0; i < 29; i++) world.step();
+    expect(Math.hypot(q.x - p.x, q.y - p.y)).toBeLessThan(before);
+  });
+});
+
+describe('group flight', () => {
+  const flightCfg = { ...QUIET, gravity: 0, innerR: 0, outerR: 1000 };
+  const kinGenes = { hue: 0.5, marker1: 0.5, marker2: 0.5, diet: 0, speed: 0.8, fear: 1, size: 0.1, sense: 0.2 };
+  const away = (o, from) => {
+    const dx = o.x - from.x, dy = o.y - from.y, d = Math.hypot(dx, dy) || 1;
+    return (dx / d) * o.vx + (dy / d) * o.vy;
+  };
+
+  it('propagates alarm one hop through the herd and no further', () => {
+    const world = bareWorld(3, flightCfg);
+    const pred = place(world, gene({ diet: 1, aggression: 1, size: 0.6, sense: 1 }), 250, { still: true, energyFraction: 1 });
+    pred.x = 250; pred.y = 0;
+    pred.energy = pred.maxEnergy * 0.4;   // hungry enough to be hunting once perceived
+
+    const b = place(world, gene(kinGenes), 250, { still: true, energyFraction: 1 }); b.x = 290; b.y = 0;  // 40 from pred — sees it, senseR 60
+    const a = place(world, gene(kinGenes), 250, { still: true, energyFraction: 1 }); a.x = 325; a.y = 0;  // 75 from pred (beyond its own senseR 60, inside alarmR 90), 35 from b
+    const c = place(world, gene(kinGenes), 250, { still: true, energyFraction: 1 }); c.x = 375; c.y = 0;  // 50 from a, 85 from b (beyond b's senseR)
+
+    world.step();
+
+    expect(b.ownThreat).toBe(pred);
+    expect(a.ownThreat).toBe(null);
+    expect(a.threat).toBe(pred);
+    expect(a.alarmed).toBe(true);
+    expect(away(a, pred)).toBeGreaterThan(0);
+
+    expect(c.threat).toBe(null);
+    expect(c.alarmed).toBe(false);
+  });
+
+  it('a lone unarmoured animal flees the threat directly and never guards', () => {
+    const world = bareWorld(3, flightCfg);
+    const pred = place(world, gene({ diet: 1, aggression: 1, size: 0.6, sense: 1 }), 250, { still: true, energyFraction: 1 });
+    pred.x = 250; pred.y = 0;
+    pred.energy = pred.maxEnergy * 0.4;
+    const prey = place(world, gene({ ...kinGenes, armor: 0 }), 250, { still: true, energyFraction: 1 });
+    prey.x = 290; prey.y = 0;   // 40 away, well inside alarmR
+
+    world.step();
+    expect(prey.threatened).toBe(true);
+    expect(prey.guarding).toBe(false);
+    expect(away(prey, pred)).toBeGreaterThan(0);
+  });
+
+  it('an armoured member of a big-enough herd guards the flank facing the threat', () => {
+    const world = bareWorld(3, flightCfg);
+    const pred = place(world, gene({ diet: 1, aggression: 1, size: 0.6, sense: 1 }), 250, { still: true, energyFraction: 1 });
+    pred.x = 250; pred.y = 0;
+    pred.energy = pred.maxEnergy * 0.4;
+
+    const guard = place(world, gene({ ...kinGenes, armor: 1 }), 250, { still: true, energyFraction: 1 });
+    guard.x = 290; guard.y = 0;
+    place(world, gene({ ...kinGenes, armor: 0 }), 250, { still: true, energyFraction: 1 }).x = 330;
+    place(world, gene({ ...kinGenes, armor: 0 }), 250, { still: true, energyFraction: 1 }).x = 340;
+
+    world.step();
+    expect(guard.threatened).toBe(true);
+    expect(guard.guarding).toBe(true);
+    expect(world.stats.guards).toBeGreaterThan(0);
+  });
+});
+
+describe('packs', () => {
+  it('a hunting relative with no prey of its own adopts a herd-mate\'s target', () => {
+    const world = bareWorld(3, { ...QUIET, gravity: 0 });
+    const predGenes = { diet: 1, aggression: 1, size: 0.3, sense: 1, hue: 0.5, marker1: 0.5, marker2: 0.5, kinTolerance: 1 };
+    const hunter = place(world, gene(predGenes), 250, { still: true, energyFraction: 1 });
+    hunter.x = 250; hunter.y = 0;
+    hunter.energy = hunter.maxEnergy * 0.3;
+
+    const packmate = place(world, gene({ ...predGenes, sense: 0.2 }), 250, { still: true, energyFraction: 1 });
+    packmate.x = 300; packmate.y = 0;   // 50 from the hunter — within herdR (55), senseR (60)
+    packmate.energy = packmate.maxEnergy * 0.3;
+
+    const prey = place(world, gene({ size: 0.1 }), 250, { still: true, energyFraction: 1 });
+    prey.x = 225; prey.y = 0;   // 25 from the hunter; 75 from the packmate — outside its own senseR (60)
+
+    world.step();
+    expect(hunter.prey).toBe(prey);
+    expect(packmate.prey).toBe(prey);
+  });
+});
+
 describe('budding', () => {
   const budAfter = 5;
   const lonely = () => {

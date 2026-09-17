@@ -16,7 +16,7 @@ export class World {
     this.tick = 0;
     this.orgs = [];
     this.food = [];
-    this.stats = { born: 0, budded: 0, starved: 0, burned: 0, froze: 0, killed: 0, oldAge: 0, immigrants: 0, plantsEaten: 0, meatEaten: 0, infections: 0, encysted: 0, hatched: 0 };
+    this.stats = { born: 0, budded: 0, starved: 0, burned: 0, froze: 0, killed: 0, oldAge: 0, immigrants: 0, plantsEaten: 0, meatEaten: 0, infections: 0, encysted: 0, hatched: 0, hunts: 0, huntsAbandoned: 0, alarms: 0, guards: 0 };
     this.events = [];
     this.speciesCount = 0;
     this.species = [];        // registry: {id, hue, born, count, peak, alive}
@@ -162,80 +162,20 @@ export class World {
       if (f.kind === 'meat') { f.energy -= 0.02; if (f.energy <= 0) f.alive = false; }   // carrion rots
     }
 
-    // ── perception + steering ──
+    // ── perception, propagation, steering ──
+    // Three steps per organism, run back to back in iteration order (not
+    // three separate passes over the array): perceive() reads the world and
+    // its neighbours; propagate() lets it react to a herd-mate's threat or
+    // prey, one hop, before it moves; steer() turns all of that into thrust.
+    // Because this runs one organism at a time rather than in three full
+    // sweeps, a neighbour later in `orgs` may still be carrying last tick's
+    // herdN/threat/prey when it is read here. That staleness is at most one
+    // tick and is treated as acceptable throughout — see docs/design.md.
     for (const o of orgs) {
       if (!o.alive) continue;
-      const g = o.g;
-      let nf = null, nfd = Infinity, nk = null, nkd = Infinity, ns = null, nsd = Infinity;
-      const sr2 = o.senseR * o.senseR;
-      for (const f of food) {
-        if (!f.alive) continue;
-        const eff = f.kind === 'plant' ? o.plantEff : o.meatEff;
-        if (eff < 0.15) continue;                          // not worth digesting
-        const dx = f.x - o.x, dy = f.y - o.y, d2 = (dx * dx + dy * dy) / (eff * eff);   // prefer what it digests well
-        if (d2 < sr2 && d2 < nfd) { nfd = d2; nf = f; }
-      }
-      let prey = null, preyd = Infinity, threat = null, threatd = Infinity;
-      const hunter = g[G.aggression] > 0.45 && o.meatEff > 0.3 && o.energy < o.maxEnergy * 0.7;   // satiated predators don't hunt
-      const starving = o.energy < o.maxEnergy * 0.4;
-      for (const p of orgs) {
-        if (p === o || !p.alive) continue;
-        const dx = p.x - o.x, dy = p.y - o.y, d2 = dx * dx + dy * dy;
-        if (d2 > sr2) continue;
-        const kin = this.isKin(o, p);
-        if (kin) { if (d2 < nkd) { nkd = d2; nk = p; } }
-        else if (!p.hidden && d2 < nsd) { nsd = d2; ns = p; }
-        if (p.hidden) continue;
-        if (hunter && p.r < o.r * cfg.preyRatio && (!kin || (starving && g[G.kinTolerance] < 0.5)) && d2 < preyd) { preyd = d2; prey = p; }
-        if (p.g[G.aggression] > 0.45 && p.meatEff > 0.3 && o.r < p.r * cfg.preyRatio && d2 < threatd) { threatd = d2; threat = p; }
-      }
-      o.nearKin = nk; o.nearStranger = ns; o.prey = prey; o.threat = threat;
-      let nh = null, nhd = Infinity;
-      for (const h of this.hides) { const dx = h.x - o.x, dy = h.y - o.y, d2 = dx * dx + dy * dy; if (d2 < sr2 * 1.5 && d2 < nhd) { nhd = d2; nh = h; } }
-
-      let sx = 0, sy = 0;
-      const pull = (t, w) => { if (!t || !w) return; const dx = t.x - o.x, dy = t.y - o.y, d = Math.hypot(dx, dy) || 1; sx += dx / d * w; sy += dy / d * w; };
-      const hungry = 1.2 - o.energy / o.maxEnergy;         // 0.2 when full, 1.2 when empty
-      o.settling = !o.hasEncysted && o.energy < o.maxEnergy * cfg.cystAt && !(nf && nfd < 40 * 40);   // starving, and no food in reach
-      if (!o.settling) {
-      pull(nf, g[G.foodDrive] * (1.2 + 1.6 * hungry));
-      pull(nk, (g[G.kinDrive] * 2 - 1) * (o.energy > o.mateAt ? 1.4 : 0.8));
-      pull(ns, (g[G.strangerDrive] * 2 - 1) * (g[G.aggression] > 0.45 ? 0.8 + hungry * 0.6 : 1));
-      pull(prey, o.meatEff * (0.5 + hungry * 1.4));
-      const threatened = threat && threatd < 80 * 80;
-      if (threatened) pull(threat, -g[G.fear] * 2.2);
-      pull(nh, g[G.hideDrive] * (1.3 - hungry) * (threatened ? 1.8 : 1) * (o.hidden ? 0.4 : 1));
-      }
-      // orbit steering: aim for circular velocity at the preferred radius,
-      // plus a radial nudge toward it. Weighted by the orbitHold gene, with a
-      // hard-wired survival reflex near the corona and the cold rim.
-      const r = o.dist || 1, ux = o.x / r, uy = o.y / r;
-      const spin = (o.x * o.vy - o.y * o.vx) >= 0 ? 1 : -1;   // keep current sense of rotation
-      const accel = Math.min(cfg.gravity / (r * r), cfg.gravityCap);
-      const vCirc = Math.sqrt(accel * r);
-      // preferred radius tracks the star's output; a settling organism aims for the safe middle of the band
-      const prefR = o.settling ? Math.max(this.innerR * 1.2, Math.min(this.outerR * 0.9, r)) : o.prefR * lum;
-      const off = Math.max(-1, Math.min(1, (prefR - r) / 90));
-      const danger = r < this.innerR * 0.85 || r > this.outerR * 1.12;
-      const hold = (danger || o.settling) ? 1.6 : g[G.orbitHold] * 1.3;
-      const dvx = -uy * spin * vCirc + ux * off * 0.5 - o.vx;
-      const dvy = ux * spin * vCirc + uy * off * 0.5 - o.vy;
-      sx += dvx * hold * 1.4; sy += dvy * hold * 1.4;
-      // encyst once the orbit is circular and inside the band
-      if (o.settling && r > this.innerR * 1.1 && r < this.outerR * 0.95 && Math.hypot(dvx, dvy) < 0.12 && o.energy > o.maxEnergy * 0.05) {
-        o.alive = false; o.cause = 'encysted'; o.hasEncysted = true;
-        this.cysts.push(new Cyst(o)); this.stats.encysted++;
-        continue;
-      }
-
-      const mag = Math.hypot(sx, sy);
-      o.sprinting = !!(prey && preyd < 140 * 140 && hungry > 0.5);
-      if (mag > 0.05) {
-        const boost = o.sprinting ? cfg.sprint : 1;
-        const t = o.thrust * Math.min(1, mag) * boost;
-        o.vx += sx / mag * t; o.vy += sy / mag * t;
-        o.energy -= t * 0.5 * (0.5 + o.r / 6) * (o.sprinting ? 1.6 : 1);
-      }
+      this.perceive(o, cfg);
+      this.propagate(o);
+      this.steer(o, cfg, lum);
     }
 
     // ── organism physics, metabolism, environment ──
@@ -347,6 +287,227 @@ export class World {
     if (this.orgs.length === 0 && this.cysts.length === 0 && !this.extinct) { this.extinct = true; this.log('life is extinct'); }
     if (this.orgs.length > 0) this.extinct = false;
     if (this.tick % 90 === 0) this.trackSpecies();
+  }
+
+  // ── perceive: what this organism can see and is doing this tick ──
+  // Also runs hunting's start/stop hysteresis and its target
+  // acquisition/persistence, and accumulates the herd (relatives within
+  // herdR) that steer() turns into cohesion, alignment and separation.
+  perceive(o, cfg) {
+    const orgs = this.orgs, food = this.food, g = o.g;
+    const sr2 = o.senseR * o.senseR;
+
+    let nf = null, nfd = Infinity;
+    for (const f of food) {
+      if (!f.alive) continue;
+      const eff = f.kind === 'plant' ? o.plantEff : o.meatEff;
+      if (eff < 0.15) continue;                          // not worth digesting
+      const dx = f.x - o.x, dy = f.y - o.y, d2 = (dx * dx + dy * dy) / (eff * eff);   // prefer what it digests well
+      if (d2 < sr2 && d2 < nfd) { nfd = d2; nf = f; }
+    }
+    o.nearFood = nf; o.nearFoodD2 = nfd;
+
+    // hunting hysteresis: start once hungry enough, keep at it until nearly
+    // full, instead of flickering on and off around a single threshold.
+    const canHunt = g[G.aggression] > 0.45 && o.meatEff > 0.3;
+    if (!canHunt) o.hunting = false;
+    else if (o.hunting && o.energy > o.maxEnergy * cfg.huntStop) o.hunting = false;
+    else if (!o.hunting && o.energy < o.maxEnergy * cfg.huntStart) o.hunting = true;
+    const starving = o.energy < o.maxEnergy * 0.4;
+
+    // does the held target still hold up? drop it without recording an
+    // abandonment if it simply died — that is a resolved hunt, not a quit one
+    const hadPrey = o.prey;
+    let prey = o.prey;
+    if (prey) {
+      if (!prey.alive) prey = null;
+      else if (prey.hidden || prey.r >= o.r * cfg.preyRatio) prey = null;
+      else {
+        const dx = prey.x - o.x, dy = prey.y - o.y, d2 = dx * dx + dy * dy;
+        const leash2 = (o.senseR * cfg.huntLeash) ** 2;
+        if (d2 > leash2 || this.tick - o.huntSince > cfg.huntGiveUp || !o.hunting) prey = null;
+      }
+    }
+    if (hadPrey && !prey && hadPrey.alive) {
+      o.avoidId = hadPrey.id; o.avoidUntil = this.tick + cfg.huntRest;
+      this.stats.huntsAbandoned++;
+    }
+
+    const herdR2 = cfg.herdR * cfg.herdR;
+    let nk = null, nkd = Infinity, ns = null, nsd = Infinity, threat = null, threatd = Infinity;
+    let bestPrey = null, bestScore = Infinity;
+    o.herdN = 0; o.herd.length = 0;
+    let hsx = 0, hsy = 0, hvx = 0, hvy = 0, spx = 0, spy = 0;
+
+    for (const p of orgs) {
+      if (p === o || !p.alive) continue;
+      const dx = p.x - o.x, dy = p.y - o.y, d2 = dx * dx + dy * dy;
+      if (d2 > sr2) continue;
+      const kin = this.isKin(o, p);
+      if (kin) { if (d2 < nkd) { nkd = d2; nk = p; } }
+      else if (!p.hidden && d2 < nsd) { nsd = d2; ns = p; }
+      if (p.hidden) continue;
+      if (kin && d2 < herdR2) {          // the same herd: cohesion, alignment, separation
+        o.herd.push(p); o.herdN++;
+        hsx += p.x; hsy += p.y; hvx += p.vx; hvy += p.vy;
+        const sepR = (o.r + p.r) * cfg.sepFactor, dd = Math.sqrt(d2) || 0.01;
+        if (dd < sepR) { const k = 1 - dd / sepR; spx -= dx / dd * k; spy -= dy / dd * k; }
+      }
+      // a straggler (no herd of its own) scores lower — a predator picks it off
+      // rather than wading into the herd for something better defended
+      if (o.hunting && p.r < o.r * cfg.preyRatio && (!kin || (starving && g[G.kinTolerance] < 0.5))
+          && !(p.id === o.avoidId && this.tick < o.avoidUntil)) {
+        const score = d2 * (1 + cfg.armorAversion * p.g[G.armor]) * (p.herdN === 0 ? cfg.stragglerBias : 1);
+        if (score < bestScore) { bestScore = score; bestPrey = p; }
+      }
+      if (p.g[G.aggression] > 0.45 && p.meatEff > 0.3 && p.hunting && o.r < p.r * cfg.preyRatio && d2 < threatd) { threatd = d2; threat = p; }
+    }
+
+    // keep the held target unless something else scores meaningfully better
+    if (!prey && bestPrey) { prey = bestPrey; o.huntSince = this.tick; this.stats.hunts++; }
+    else if (prey && bestPrey && bestPrey !== prey) {
+      const cdx = prey.x - o.x, cdy = prey.y - o.y, cd2 = cdx * cdx + cdy * cdy;
+      const curScore = cd2 * (1 + cfg.armorAversion * prey.g[G.armor]) * (prey.herdN === 0 ? cfg.stragglerBias : 1);
+      if (bestScore < curScore * cfg.targetSwitch) { prey = bestPrey; o.huntSince = this.tick; this.stats.hunts++; }
+    }
+    o.prey = prey;
+
+    o.nearKin = nk; o.nearStranger = ns; o.ownThreat = threat;
+    o.herdCx = o.herdN ? hsx / o.herdN : o.x; o.herdCy = o.herdN ? hsy / o.herdN : o.y;
+    o.herdVx = o.herdN ? hvx / o.herdN : o.vx; o.herdVy = o.herdN ? hvy / o.herdN : o.vy;
+    o.sepX = spx; o.sepY = spy;
+
+    let nh = null, nhd = Infinity;
+    for (const h of this.hides) { const dx = h.x - o.x, dy = h.y - o.y, d2 = dx * dx + dy * dy; if (d2 < sr2 * 1.5 && d2 < nhd) { nhd = d2; nh = h; } }
+    o.nearHide = nh; o.nearHideD2 = nhd;
+  }
+
+  // ── propagate: react to a herd-mate's perception, one hop ──
+  // An organism with no threat of its own adopts an alarmed relative's; a
+  // hunting organism with no prey of its own adopts a hunting relative's.
+  // One hop only — this does not chain past a single relative, so alarm and
+  // a shared prey target cannot leapfrog the whole herd in one tick. A herd-
+  // mate later in `orgs` may still be carrying last tick's fields at the
+  // point this reads it; see the comment in step().
+  propagate(o) {
+    o.alarmed = false;
+    o.threat = o.ownThreat;
+    if (!o.threat) {
+      for (const p of o.herd) {
+        if (p.ownThreat) { o.threat = p.ownThreat; o.alarmed = true; this.stats.alarms++; break; }
+      }
+    }
+    if (o.hunting && !o.prey) {
+      for (const p of o.herd) {
+        if (p.hunting && p.prey && p.prey.alive) { o.prey = p.prey; o.huntSince = this.tick; this.stats.hunts++; break; }
+      }
+    }
+  }
+
+  // ── steer: turn perception into thrust ──
+  steer(o, cfg, lum) {
+    const g = o.g;
+    const nf = o.nearFood, nfd = o.nearFoodD2, nk = o.nearKin, ns = o.nearStranger, nh = o.nearHide;
+    const prey = o.prey, threat = o.threat;
+    const preyd = prey ? (prey.x - o.x) ** 2 + (prey.y - o.y) ** 2 : Infinity;
+
+    let sx = 0, sy = 0;
+    const pull = (t, w) => { if (!t || !w) return; const dx = t.x - o.x, dy = t.y - o.y, d = Math.hypot(dx, dy) || 1; sx += dx / d * w; sy += dy / d * w; };
+    const hungry = 1.2 - o.energy / o.maxEnergy;         // 0.2 when full, 1.2 when empty
+    o.settling = !o.hasEncysted && o.energy < o.maxEnergy * cfg.cystAt && !(nf && nfd < 40 * 40);   // starving, and no food in reach
+
+    // threatened by distance to self, or (for a herd member) by distance to
+    // the herd's centroid — so the far side of the herd reacts too
+    let threatened = false;
+    if (threat) {
+      const tdx = threat.x - o.x, tdy = threat.y - o.y;
+      threatened = tdx * tdx + tdy * tdy < cfg.alarmR * cfg.alarmR;
+      if (!threatened && o.herdN > 0) {
+        const hdx = threat.x - o.herdCx, hdy = threat.y - o.herdCy;
+        threatened = hdx * hdx + hdy * hdy < cfg.alarmR * cfg.alarmR;
+      }
+    }
+    o.threatened = threatened;
+
+    if (!o.settling) {
+      pull(nf, g[G.foodDrive] * (1.2 + 1.6 * hungry));
+
+      // herding: relatives within herdR move as a group — cohesion, velocity
+      // alignment, and spacing — scaled by the bipolar kinDrive gene. A
+      // straggler with no herd nearby just heads for its nearest relative to
+      // regroup, the pull this always used to apply.
+      const herdW = g[G.kinDrive] * 2 - 1;
+      if (o.herdN > 0) {
+        pull({ x: o.herdCx, y: o.herdCy }, herdW * cfg.cohesion * (threatened ? cfg.alarmCohesion : 1));
+        if (herdW > 0) {
+          const ax = o.herdVx - o.vx, ay = o.herdVy - o.vy, am = Math.hypot(ax, ay);
+          if (am > 1e-3) { const k = Math.min(1, am / 0.3) * herdW * cfg.alignment; sx += ax / am * k; sy += ay / am * k; }
+        }
+        sx += o.sepX * cfg.separation; sy += o.sepY * cfg.separation;   // spacing, regardless of the gene
+      } else {
+        pull(nk, herdW * (o.energy > o.mateAt ? 1.4 : 0.8));
+      }
+
+      pull(ns, (g[G.strangerDrive] * 2 - 1) * (g[G.aggression] > 0.45 ? 0.8 + hungry * 0.6 : 1));
+
+      // hunting: aim ahead of the prey's motion, not at where it is
+      if (prey) {
+        const d = Math.sqrt(preyd) || 1;
+        const t = Math.min(d / (o.maxSpeed * cfg.sprint), cfg.leadMax);
+        pull({ x: prey.x + prey.vx * t * cfg.lead, y: prey.y + prey.vy * t * cfg.lead }, o.meatEff * (0.5 + hungry * 1.4));
+      }
+
+      // group flight: an armoured member of a big-enough herd takes the flank
+      // between the threat and the herd's centroid; everyone else flees the
+      // threat directly and drifts to the herd's far side.
+      if (threatened) {
+        const guard = o.herdN >= cfg.guardMinHerd && g[G.armor] >= cfg.guardArmor;
+        if (guard && !o.guarding) this.stats.guards++;
+        o.guarding = guard;
+        const tdx = threat.x - o.herdCx, tdy = threat.y - o.herdCy, td = Math.hypot(tdx, tdy) || 1;
+        if (guard) {
+          pull({ x: o.herdCx + tdx / td * cfg.herdR * 0.4, y: o.herdCy + tdy / td * cfg.herdR * 0.4 }, cfg.guardWeight);
+          pull(threat, -g[G.fear] * 2.2 * 0.3);
+        } else {
+          pull(threat, -g[G.fear] * 2.2);
+          if (o.herdN > 0) pull({ x: o.herdCx - tdx / td * cfg.herdR * 0.4, y: o.herdCy - tdy / td * cfg.herdR * 0.4 }, cfg.shelterWeight);
+        }
+      } else {
+        o.guarding = false;
+      }
+
+      pull(nh, g[G.hideDrive] * (1.3 - hungry) * (threatened ? 1.8 : 1) * (o.hidden ? 0.4 : 1));
+    }
+    // orbit steering: aim for circular velocity at the preferred radius,
+    // plus a radial nudge toward it. Weighted by the orbitHold gene, with a
+    // hard-wired survival reflex near the corona and the cold rim.
+    const r = o.dist || 1, ux = o.x / r, uy = o.y / r;
+    const spin = (o.x * o.vy - o.y * o.vx) >= 0 ? 1 : -1;   // keep current sense of rotation
+    const accel = Math.min(cfg.gravity / (r * r), cfg.gravityCap);
+    const vCirc = Math.sqrt(accel * r);
+    // preferred radius tracks the star's output; a settling organism aims for the safe middle of the band
+    const prefR = o.settling ? Math.max(this.innerR * 1.2, Math.min(this.outerR * 0.9, r)) : o.prefR * lum;
+    const off = Math.max(-1, Math.min(1, (prefR - r) / 90));
+    const danger = r < this.innerR * 0.85 || r > this.outerR * 1.12;
+    const hold = (danger || o.settling) ? 1.6 : g[G.orbitHold] * 1.3;
+    const dvx = -uy * spin * vCirc + ux * off * 0.5 - o.vx;
+    const dvy = ux * spin * vCirc + uy * off * 0.5 - o.vy;
+    sx += dvx * hold * 1.4; sy += dvy * hold * 1.4;
+    // encyst once the orbit is circular and inside the band
+    if (o.settling && r > this.innerR * 1.1 && r < this.outerR * 0.95 && Math.hypot(dvx, dvy) < 0.12 && o.energy > o.maxEnergy * 0.05) {
+      o.alive = false; o.cause = 'encysted'; o.hasEncysted = true;
+      this.cysts.push(new Cyst(o)); this.stats.encysted++;
+      return;
+    }
+
+    const mag = Math.hypot(sx, sy);
+    o.sprinting = !!(o.hunting && prey && preyd < 140 * 140);
+    if (mag > 0.05) {
+      const boost = o.sprinting ? cfg.sprint : 1;
+      const t = o.thrust * Math.min(1, mag) * boost;
+      o.vx += sx / mag * t; o.vy += sy / mag * t;
+      o.energy -= t * 0.5 * (0.5 + o.r / 6) * (o.sprinting ? 1.6 : 1);
+    }
   }
 
   fight(att, def) {

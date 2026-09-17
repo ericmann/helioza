@@ -15,11 +15,15 @@
 Heliozoa is an artificial-life sandbox that runs in a browser tab. Simple
 organisms orbit a star. Gravity pulls them in, light drag decays their orbits,
 and staying in the habitable band costs energy they have to find somewhere. They
-eat plants, or each other, or both badly. They mate with things they recognise
-as relatives, catch plagues from things with similar immune systems, hide in
-dark clouds, and curl up into dormant cysts when the food runs out. Nobody told
-them to do any of this. They have nineteen floating-point genes and a weighted
-sum of steering drives, and everything else is consequence.
+eat plants, or each other, or both badly. Carnivores hunt, in packs when their
+genes lean that way, and pick off the straggler that wandered from the herd.
+Herbivores cluster with their kin, flee together when one of them spots a
+predator, and the armoured members stand between the threat and the rest. They
+mate with things they recognise as relatives, catch plagues from things with
+similar immune systems, hide in dark clouds, and curl up into dormant cysts when
+the food runs out. Nobody told them to do any of this. They have nineteen
+floating-point genes and a weighted sum of steering drives, and everything else
+is consequence.
 
 There is no neural network here and no fitness function. There is a star, a
 budget, and a great many ways to spend it wrong.
@@ -112,9 +116,18 @@ lineage with a bad haircut.
 
 **Wolves eating every rabbit.** A carnivore lineage does well, breeds, does
 better, and clears the map of anything smaller than itself. Then it looks around.
-The satiation rule — a predator over 70% full stops hunting — is the only thing
-standing between the ecology and this outcome on a fixed schedule, and it does
-not always hold.
+A predator only hunts while its energy sits below 60% of capacity, and keeps
+hunting until it climbs back past 75% — that gap is the only thing standing
+between the ecology and this outcome on a fixed schedule, and it does not always
+hold.
+
+**A herd running from something one of them saw.** Relatives within a modest
+radius move as a group — cohesion, matched heading, enough personal space not
+to stack on top of each other. One animal spots a predator and the alarm passes
+to the rest of the herd, one hop, so the far side runs before the predator is
+anywhere near it. An armoured member with enough of a herd around it holds a
+position between the threat and everyone softer; a predator, all else equal,
+picks off the one that wandered off alone rather than wading in after it.
 
 **Elephants.** Size buys energy capacity, armor, and immunity from everything
 smaller, and it costs metabolism as the square. That trade is comfortably worth
