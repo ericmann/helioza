@@ -180,15 +180,40 @@ evolves by mutation alone, which is markedly slower to split the population.
 
 ## Predation
 
-An organism hunts if `aggression > 0.45`, `meatEff > 0.3`, and it is under 70%
-full. That last clause is the satiation rule, and it matters more than it looks:
-without it a large carnivore kills continuously and clears the map. It also
-means a fat predator is briefly safe to be near.
+An organism can hunt at all if `aggression > 0.45` and `meatEff > 0.3`. Whether
+it actually is hunting right now is a persistent, hysteretic state — `o.hunting`
+— not a per-tick recomputation. It switches on once energy falls below
+`huntStart` (60% of capacity) and stays on until energy climbs back above
+`huntStop` (75%). The gap between the two thresholds is deliberate: a predator
+sitting exactly at the boundary does not flicker in and out of hunting mode
+every other tick the way a single cutoff would make it. `huntStop` is well
+short of full for a second reason, covered below.
 
-It will attack anything up to `preyRatio` (1.1) times its own radius, so slightly
-larger prey is on the menu, but damage carries `(att.r / def.r)^2.5`, which falls
-off steeply — attacking upward is allowed and almost never works. Relatives are
-off the menu unless the attacker is starving *and* has `kinTolerance < 0.5`.
+A target persists once acquired, instead of being re-picked from scratch every
+tick. `o.prey` survives across ticks and is only dropped when it dies, goes
+hidden, grows past the size ladder, drifts beyond `huntLeash × senseR`, the
+chase has run longer than `huntGiveUp` ticks with nothing to show for it, or the
+predator stops hunting. A predator that gives it up while the prey is still
+alive remembers that target as `avoidId` for `huntRest` ticks — it will not
+immediately re-acquire the exact same animal it just failed to catch.
+
+While a target is held, a new candidate only replaces it if the candidate's
+score is below `targetSwitch` (60%) of the current target's score — otherwise a
+predator would spend its whole chase budget re-optimizing between two prey of
+nearly equal quality and catch neither. The score itself is
+`distance² × (1 + armorAversion × armor) × (herdN === 0 ? stragglerBias : 1)`:
+armour makes a candidate look farther away than it is, and having no herd
+nearby (see Herding, below) makes it look closer. A predator picks off the
+animal that wandered off from the group rather than wading into the herd for
+one that is better defended — not because it reasons about it, but because that
+animal scores lower.
+
+Pursuit aims at where the prey will be, not where it is: `lead` (0.8) times a
+time-to-intercept estimate, capped at `leadMax` ticks. It will attack anything
+up to `preyRatio` (1.1) times its own radius, so slightly larger prey is on the
+menu, but damage carries `(att.r / def.r)^2.5`, which falls off steeply —
+attacking upward is allowed and almost never works. Relatives are off the menu
+unless the attacker is starving *and* has `kinTolerance < 0.5`.
 
 Damage per contact tick is
 `(aggression − 0.3) × 12 × (0.5 + r/8) × sizeAdvantage − armor × 6`, tuned so a
@@ -196,13 +221,98 @@ kill takes a handful of contact ticks rather than a siege. A chase that lasts
 long enough for the prey to break away should be possible; a stalemate where two
 organisms grind at each other for a thousand ticks should not.
 
-Sprinting multiplies thrust and speed cap by `sprint` while chasing prey within
-140 units, at 1.6× the energy cost. It is what makes a hunt a commitment: a
-predator that sprints and misses is worse off than one that never tried.
+Sprinting multiplies thrust and speed cap by `sprint` while hunting and within
+140 units of the current target, at 1.6× the energy cost. It is what makes a
+hunt a commitment: a predator that sprints and misses is worse off than one
+that never tried.
 
 The meal is `(victim's energy × killYield + 25 + 70 × victim size) × meatEff`.
 The body is worth something on its own, so killing a starving organism is still
 worth doing, and a fat one is worth much more.
+
+### Why `huntStop` sits at 75%, not 90%
+
+It was 90% originally, matching the old single-threshold satiation rule this
+replaced. At 90%, a predator with a run of easy kills barely ever stops
+hunting, and a population of them sustains a kill rate the prey population
+cannot outbreed. The 24-seed sweep below shows what that did: several seeds
+that used to end with a stable mixed population instead ran their carnivores up
+past twenty individuals on an abundant herd, stripped it in a few thousand
+ticks, and collapsed the whole food web behind them — predators included, once
+there was nothing left to eat. Stopping at 75% leaves real appetite while
+capping how long a well-fed predator keeps adding to the kill count.
+
+## Herding
+
+Every relative within `herdR` (55 units) of an organism counts as the same
+herd, computed fresh each tick in `perceive()` alongside its nearest kin, food
+and threat. `steer()` turns that into three forces, all scaled by the bipolar
+`kinDrive` gene (`herdW = kinDrive × 2 − 1`):
+
+- **Cohesion** — a pull toward the herd's centroid, weight `herdW × cohesion`,
+  doubled while the herd is fleeing (see Group flight). A loner-leaning genome
+  (`herdW < 0`) gets pushed *away* from its own herd by this same term.
+- **Alignment** — for `herdW > 0` only, a pull to match the herd's average
+  velocity. A loner does not bother matching anyone's heading.
+- **Separation** — an unconditional push away from any herd-mate closer than
+  `(ra + rb) × sepFactor`, regardless of `kinDrive`. This is personal space, not
+  a social preference; without it cohesion alone would collapse a herd onto a
+  single point.
+
+An organism with no relatives inside `herdR` is not in a herd and falls back to
+the pull this replaced: straight toward its single nearest kin, whatever the
+distance out to `senseR`. That is what brings a straggler back to the group,
+and it is the same formula the whole population used before herding existed.
+
+Herds sharing a preferred orbit graze one patch of the band down and drift
+together to the next. That is local overgrazing, and it is a consequence of
+cohesion working as intended, not something to correct.
+
+## Group flight and guarding
+
+A stranger is only a threat if it is actually hunting (`p.hunting`, see
+Predation) — a fed predator does not trigger anyone's flee response. Perceiving
+a threat and reacting to it are two different fields: `ownThreat` is what an
+organism personally sees; `threat` is what it is reacting to, which may be
+adopted from a relative.
+
+That adoption is one hop, computed in `propagate()` right after perception, before
+anyone moves: an organism with no `ownThreat` of its own looks at its herd and
+takes the first `ownThreat` it finds there, marking itself `alarmed`. It does
+*not* look at a relative's already-adopted `threat` — only at `ownThreat` — so
+alarm cannot leapfrog across a whole herd in one tick; it moves outward one
+relative at a time, tick by tick, the way it would if this were a literal
+"something spooked, now I'm spooked" reaction passed along a chain.
+
+An organism is `threatened` — the state that actually drives flight — once the
+threat is within `alarmR` (90 units) of *either* itself or, for a herd member,
+the herd's centroid. That second clause is what makes the far side of a herd
+flee before the predator is anywhere near it: it reacts to the herd's exposure,
+not just its own.
+
+While threatened, an armoured member of a big-enough herd
+(`herdN >= guardMinHerd` and `armor >= guardArmor`) becomes a guard: instead of
+running, it takes station on the flank between the herd's centroid and the
+threat, `herdR × 0.4` out, and only leans away from the threat at 30% of the
+normal flee strength. Nothing else is needed to make this read as "the armoured
+protect the weak" — the guard is physically between the predator and the herd,
+its armour makes the predator's straggler scoring avoid it anyway, and if the
+predator closes in regardless, the existing armour term in combat damage does
+the rest. Every other threatened member flees the threat directly, at full
+`fear` strength, plus a pull to the herd's *far* side — away from both the
+threat and, usually, past where the guard is standing.
+
+### Packs
+
+The same one-hop adoption used for alarm also shares a hunt: in `propagate()`,
+a hunting organism with no `prey` of its own looks at its herd for a relative
+that is hunting *and* already has one, and takes the same target. This is the
+whole mechanism — there is no coordination beyond it, no flanking, and no
+signal that a hunt has started rather than just being sensed. Whether pack
+hunting evolves is left entirely to selection: it depends on carnivore
+`kinDrive` staying positive, which competition over a kill does not obviously
+favour. If it turns out no seed ever produces one, that is a legitimate result,
+not a bug.
 
 ## Hiding spots
 
@@ -213,7 +323,9 @@ go to wait out a predator or to breed in peace, and it is where you starve if
 you stay.
 
 The `hideDrive` gene is scaled by `1.3 − hunger`, so a fed organism seeks cover
-and a hungry one does not. Threat within 80 units multiplies the pull by 1.8.
+and a hungry one does not. Being `threatened` (see Group flight and guarding)
+multiplies the pull by 1.8 — including when the threat was only heard about
+through a relative, not seen directly.
 
 ## Disease
 
@@ -272,7 +384,7 @@ flowchart TD
   C --> D["Plague seed<br/>every plagueEvery ticks"]
   D --> E["Cysts: gravity, ageing,<br/>hatch check"]
   E --> F["Food: gravity, drag,<br/>rot, out-of-bounds"]
-  F --> G["Perception and steering<br/>per organism; encyst check"]
+  F --> G["Per organism, in order:<br/>perceive → propagate → steer;<br/>encyst check"]
   G --> H["Physics, metabolism,<br/>heat, cold, disease drain;<br/>DEATH SWEEP"]
   H --> I["Eating"]
   I --> J["Contact: infection,<br/>mating, combat, collision"]
@@ -284,6 +396,31 @@ flowchart TD
 The death sweep sits in the middle. Anything that spends energy after it —
 notably the attacker's `0.4` per bite — can leave a live organism on negative
 energy until the next tick's sweep catches it.
+
+### `perceive → propagate → steer`
+
+Step G is not three passes over the population; it is three methods called
+back to back, once per organism, in `orgs` array order. `perceive()` reads the
+world and every other organism's *current* position and does not mutate
+anything but the organism doing the perceiving — it sets `nearFood`, `nearKin`,
+`nearStranger`, `ownThreat`, the herd fields, and resolves that tick's hunting
+target. `propagate()` is where an organism may adopt a herd-mate's `ownThreat`
+(alarm) or `prey` (a pack target) — see Group flight and guarding, and Packs.
+`steer()` turns all of it into thrust.
+
+Because this runs one organism at a time instead of in three full sweeps, an
+organism later in `orgs` has already-updated fields on any herd-mate processed
+earlier in the array this tick, but only last tick's values from one processed
+later. `herdN`, `ownThreat` and `prey` can all be up to one tick stale when read
+this way. That staleness is accepted throughout rather than engineered away —
+the alternative is three full passes over the population every tick for a
+sandbox that already runs an O(n²) perception loop twice, and the effect is at
+most a single tick of lag in something a viewer cannot perceive as a tick
+count. `verify-faithful` no longer holds past the commit tagged
+`faithful-to-original` for exactly this reason: this ordering, and the
+deliberate hunting and herding changes built on it, are new behaviour, not a
+refactor. See "Verifying a change to the core" in
+[development.md](development.md).
 
 ## The tuning levers
 
@@ -302,6 +439,11 @@ playing with while watching. The rest are in `config.js`.
 | `preyRatio` | 1.1 | How far up the size ladder a predator will reach. |
 | `sprint` | 1.5 | Thrust and speed multiplier during a chase, at 1.6× the energy cost. It is the difference between a predator that can close a gap and one that merely follows. |
 | `cystAt` | 0.22 | How desperate an organism has to be before it gives up and goes dormant. |
+| `huntStart` / `huntStop` | 0.6 / 0.75 | The hysteresis band for hunting. Widen the gap and predators commit to longer hunting stretches between rests; push `huntStop` back toward 1 and you reintroduce the overshoot-and-collapse described above. |
+| `cohesion` | 1.2 | Pull toward the herd's centroid. Raising it makes herding more visible but, per the 24-seed sweep, sometimes trades a healthy population for a tighter one — an unresolved tension between this and predation worth tuning further. |
+| `herdR` | 55 | How close relatives have to be to count as the same herd rather than a lone straggler regrouping. |
+| `alarmR` | 90 | How close a threat has to get, to the organism or its herd's centroid, before anyone actually flees. |
+| `stragglerBias` / `armorAversion` | 0.5 / 2.0 | How strongly a predator prefers an unguarded, herdless target over a defended one at the same distance. |
 | `immuneMatch` | 0.12 | How similar two immune types must be for a plague to cross. Wider values make monocultures lethal. |
 | `founders` / `familySize` | 10 / 12 | The starting population, and how much standing variation it has. |
 | `immigration` | off | God mode. Airlifts a new family whenever the population falls below `minPop`. Off by default because extinction is a legitimate result. |
@@ -312,10 +454,13 @@ Several constants read as patches rather than choices. Where the code says why,
 it is quoted. Where it does not, this section says what the constant *does* and
 leaves the motivation alone — the tuning history is not in the repository.
 
-- **Satiation on hunting.** `o.energy < o.maxEnergy * 0.7`, commented "satiated
-  predators don't hunt". The comment states the rule; it does not say what went
-  wrong without it. What the rule prevents mechanically is a large carnivore
-  hunting continuously regardless of how full it is.
+- **Satiation on hunting.** Originally a single cutoff, `o.energy <
+  o.maxEnergy * 0.7`, commented "satiated predators don't hunt". It is now the
+  `huntStart`/`huntStop` hysteresis described under Predation, for the same
+  reason a thermostat uses two temperatures and not one: a single threshold
+  flickers when energy hovers near it. `huntStop` sitting at 75% rather than
+  90% is itself a fix, not the original design — see "Why `huntStop` sits at
+  75%, not 90%" under Predation.
 - **Concave digestion.** The `1.7` exponent, commented "concave: specialists
   digest well, generalists pay for flexibility". The comment is explicit that
   the curve is deliberate. It does not record what a linear tradeoff produced.
@@ -344,7 +489,15 @@ much smaller population descended from one or two lineages, and *that* is the
 population that evolves.
 
 Sweeping seeds 1 through 24 with `scripts/headless.mjs` at 30,000 ticks, seven
-of the twenty-four went extinct, all of them between tick 11,500 and 13,200.
-That is why the ecology test pins a seed. Seed 12 survives with four species and
-a mixed diet. Seed 5 does not, and that is a legitimate result rather than a
-bug.
+of the twenty-four went extinct — the same count as before hunting and herding
+were added, though not always the same seeds or the same shape of collapse. Six
+of the seven still die the classic way, in the first food crash, between tick
+10,400 and 12,400. The seventh, seed 13, now makes it all the way to tick
+29,320 — 860 births, four species, a real population — before a late-game
+predation collapse takes the whole thing down in the run's last few hundred
+ticks. That is a new failure mode this work introduced, not a bug: a herd that
+was doing fine can still be run down faster than it can rebuild once enough of
+it has been thinned. That is why the ecology test pins a seed. Seed 12 survives
+with two species and a mixed diet, carnivores included, at every seed sweep run
+against it in this repository's history so far. Seed 5 does not, and that is a
+legitimate result rather than a bug.

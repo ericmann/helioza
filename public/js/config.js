@@ -85,4 +85,35 @@ export const CFG = {
 
   baseMetabolism: 0.014,
   maxAgeMin: 2600, maxAgeMax: 5200,
+
+  // herding: relatives within herdR move as a group instead of chaining
+  // toward the single nearest one.
+  herdR: 55,             // radius counted as "the same herd"
+  cohesion: 1.2,          // pull toward the herd's centroid, × bipolar kinDrive
+  alignment: 0.6,         // match the herd's average velocity
+  separation: 0.9,        // push apart from herd-mates that are too close
+  sepFactor: 2.2,         // separation kicks in inside (ra + rb) × sepFactor
+
+  // group flight and guarding
+  alarmR: 90,             // flee when a threat is this close to you or your herd's centroid
+  alarmCohesion: 2.0,     // cohesion multiplier while fleeing, so the herd runs as one
+  shelterWeight: 0.8,     // an unarmoured fleeing member's pull to the herd's far side
+  guardArmor: 0.5,        // minimum armor gene to hold a guard position
+  guardMinHerd: 2,        // guarding needs at least this many herd-mates
+  guardWeight: 1.6,       // a guard's pull to the flank between the herd and the threat
+
+  // hunting: a target persists across ticks, with hysteresis on when a
+  // predator starts and stops looking for one.
+  huntStart: 0.6,         // start hunting below this fraction of energy capacity
+  huntStop: 0.75,         // stop hunting above this fraction — a lower value than huntStart's
+                          // complement is deliberate: greedy predators (stop near 0.9) sustain a
+                          // kill rate that overshoots and then strips the prey population bare
+  huntGiveUp: 350,        // ticks before an unproductive chase is abandoned
+  huntRest: 400,          // ticks before the same abandoned prey is worth trying again
+  huntLeash: 1.4,         // keep a target out to this × senseR before dropping it
+  targetSwitch: 0.6,      // switch targets only for a candidate scoring below this × the current one
+  armorAversion: 2.0,     // prey-scoring penalty per unit of prey armor (lower score wins)
+  stragglerBias: 0.5,     // prey-scoring bonus for prey with no herd-mates nearby
+  lead: 0.8,              // how far ahead of the prey's motion a predator aims
+  leadMax: 40,            // cap on the lead time, in ticks
 };

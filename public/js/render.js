@@ -59,6 +59,14 @@ export function drawWorld(ctx, world, view) {
     ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
   }
 
+  // a hunting predator draws a line to the prey it is actually chasing
+  ctx.strokeStyle = 'rgba(255,120,90,0.25)'; ctx.lineWidth = 1;
+  for (const o of world.orgs) {
+    if (!o.hunting || !o.prey || !o.prey.alive) continue;
+    const [x1, y1] = toScreen(o.x, o.y), [x2, y2] = toScreen(o.prey.x, o.prey.y);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
   // organisms
   for (const o of world.orgs) {
     const [x, y] = toScreen(o.x, o.y);
@@ -91,10 +99,11 @@ export function drawWorld(ctx, world, view) {
       ctx.closePath();
     } else ctx.arc(x, y, rr, 0, Math.PI * 2);
     ctx.fill();
-    if (o.g[G.armor] > 0.3) { ctx.strokeStyle = `hsla(${o.hue},40%,85%,${alpha})`; ctx.lineWidth = 1 + o.g[G.armor] * 2.5 * scale; ctx.stroke(); }
+    if (o.g[G.armor] > 0.3) { ctx.strokeStyle = o.guarding ? `rgba(255,255,255,${alpha})` : `hsla(${o.hue},40%,85%,${alpha})`; ctx.lineWidth = 1 + o.g[G.armor] * 2.5 * scale; ctx.stroke(); }
     if (o.infected > 0) { ctx.strokeStyle = 'rgba(160,255,120,0.7)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 2.5, 0, Math.PI * 2); ctx.stroke(); }
     if (o.settling) { ctx.strokeStyle = 'rgba(200,200,255,0.5)'; ctx.setLineDash([2, 2]); ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 3, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
     if (o.sprinting) { ctx.strokeStyle = 'rgba(255,120,90,0.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 3, 0, Math.PI * 2); ctx.stroke(); }
+    if (o.threatened) { ctx.strokeStyle = 'rgba(255,200,90,0.6)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, rr + 5, 0, Math.PI * 2); ctx.stroke(); }
     // heading nub (the arrowhead already shows heading)
     if (diet < 0.67) {
       ctx.fillStyle = `rgba(255,255,255,${alpha * 0.8})`;

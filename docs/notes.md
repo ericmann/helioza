@@ -68,9 +68,14 @@ the genuinely isolated, not the merely poor — but the name suggests otherwise.
 Kinship runs entirely on `kinDistance` over the four kin genes. It was in the
 original's `module.exports`, so it stays.
 
-**`o.nearKin` and `o.nearStranger` are written and never read.** The perception
-loop stores both on the organism alongside `prey` and `threat`, which *are* read
-by `fight()` and the renderer. The two kin fields are leftovers.
+**`o.nearKin` and `o.nearStranger`, and now `ownThreat`, `herdN`, and friends,
+are read one tick late by design.** Since `perceive()`, `propagate()` and
+`steer()` run per organism rather than as three full passes over the
+population, a herd-mate later in the `orgs` array is still carrying whatever
+these fields held at the *end of last tick* when this tick's `propagate()`
+reads them for alarm or pack adoption. `docs/design.md` covers this under
+"`perceive → propagate → steer`"; it is accepted throughout, not something
+worth engineering around.
 
 **`stats.immigrants` counts airlifts, not immigrants.** It increments once per
 rescue event, each of which brings `CFG.immigrants` organisms.

@@ -26,6 +26,19 @@ export class Organism {
     this.atePlant = 0; this.ateMeat = 0;
     this.settling = false;  // heading for a stable orbit to encyst
     this.hasEncysted = false;
+    // hunting: a target persists across ticks instead of being re-picked
+    // every tick, with hysteresis on when to start and stop.
+    this.prey = null; this.huntSince = 0;
+    this.hunting = false;
+    this.avoidId = 0; this.avoidUntil = 0;   // prey recently abandoned; not worth re-targeting yet
+    // threat: what this organism itself perceives, versus what it is
+    // reacting to (which may be a herd-mate's threat, adopted by alarm)
+    this.ownThreat = null; this.threat = null;
+    this.alarmed = false; this.guarding = false; this.threatened = false;
+    // herd: relatives within cfg.herdR, recomputed every tick in perceive()
+    this.herdN = 0; this.herd = [];
+    this.herdCx = 0; this.herdCy = 0; this.herdVx = 0; this.herdVy = 0;
+    this.sepX = 0; this.sepY = 0;
     this.refresh();
     this.energy = Math.min(energy, this.maxEnergy);
   }

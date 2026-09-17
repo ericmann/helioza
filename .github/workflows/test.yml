@@ -22,6 +22,3 @@ jobs:
 
       - name: vitest
         run: npm test
-
-      - name: the refactor is still faithful to the original
-        run: node scripts/verify-faithful.mjs --ticks 20000 --seeds 1,12,4242
